@@ -1,0 +1,297 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (optional)
+    //   - email: string (required)
+    //   - photoURL: string (optional)
+    //   - role: string (optional, enum: ['student', 'admin'])
+    //
+    // Collection: courses
+    // Document ID: courseId
+    // Fields:
+    //   - title: string (required)
+    //   - instructor: string (optional)
+    //   - section: string (optional)
+    //   - tag: string (optional)
+    //   - color: string (optional)
+    //   - image: string (optional)
+    //   - code: string (required)
+    //
+    // Collection: enrollments
+    // Document ID: userId_courseId
+    // Fields:
+    //   - uid: string (required)
+    //   - courseId: string (required)
+    //   - grade: string (optional)
+    //
+    // Collection: activities
+    // Document ID: activityId
+    // Fields:
+    //   - type: string (required, enum: ['discussion', 'grade_update', 'announcement'])
+    //   - title: string (required)
+    //   - content: string (optional)
+    //   - timestamp: string (optional, ISO 8601)
+    //   - courseId: string (required)
+    //   - uid: string (required)
+    //   - authorName: string (optional)
+    //
+    // Collection: course_messages
+    // Document ID: messageId
+    // Fields:
+    //   - courseId: string (required)
+    //   - text: string (required)
+    //   - uid: string (required)
+    //   - authorName: string (required)
+    //   - authorPhoto: string (optional)
+    //   - timestamp: string (required, ISO 8601)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isEnrolled(courseId) {
+      return isAuthenticated() && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + "_" + courseId));
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isRequestOwner() {
+      return isAuthenticated() && request.auth.uid == request.resource.data.uid;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.uid == "shanesdih" ||
+         request.auth.token.email == "piercesnyder39@gmail.com" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isValidMaterial(data) {
+      return data.keys().hasAll(['courseId', 'type', 'title', 'uid', 'timestamp', 'published']) &&
+             data.courseId is string &&
+             data.type in ['folder', 'assignment', 'file', 'link'] &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.uid is string &&
+             (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp) &&
+             data.published is bool &&
+             (!('parentId' in data) || data.parentId == null || data.parentId is string) &&
+             (!('description' in data) || data.description is string) &&
+             (!('url' in data) || data.url is string) &&
+             (!('color' in data) || (data.color is string && data.color.matches("^#[0-9A-Fa-f]{6}$"))) &&
+             (!('googleDriveFileId' in data) || data.googleDriveFileId is string) &&
+             (!('googleDriveTemplateId' in data) || data.googleDriveTemplateId is string);
+    }
+
+    function isValidSubmission(data) {
+      return data.keys().hasAll(['materialId', 'uid', 'googleDriveFileId', 'status', 'timestamp']) &&
+             data.materialId is string &&
+             data.uid is string &&
+             data.googleDriveFileId is string &&
+             data.status in ['draft', 'submitted'] &&
+             (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp) &&
+             (!('submittedAt' in data) || data.submittedAt is timestamp);
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             isValidEmail(data.email) &&
+             (!('displayName' in data) || data.displayName is string) &&
+             (!('photoURL' in data) || data.photoURL == null || data.photoURL is string) &&
+             (!('role' in data) || data.role in ['student', 'admin']);
+    }
+
+    function isValidCourse(data) {
+      return data.keys().hasAll(['title', 'code', 'uid']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.code is string && data.code.size() > 0 &&
+             data.uid is string &&
+             (!('instructor' in data) || data.instructor is string) &&
+             (!('section' in data) || data.section is string) &&
+             (!('tag' in data) || data.tag is string) &&
+             (!('color' in data) || data.color is string) &&
+             (!('image' in data) || data.image is string);
+    }
+
+    function isValidEnrollment(data) {
+      return data.keys().hasAll(['uid', 'courseId']) &&
+             data.uid is string && data.courseId is string &&
+             (!('grade' in data) || data.grade is string);
+    }
+
+    function isValidActivity(data) {
+      return data.keys().hasAll(['type', 'title', 'courseId', 'uid', 'timestamp']) &&
+             data.type in ['discussion', 'grade_update', 'announcement'] &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.courseId is string &&
+             data.uid is string &&
+             isValidDateString(data.timestamp) &&
+             (!('content' in data) || data.content is string) &&
+             (!('authorName' in data) || data.authorName is string);
+    }
+
+    function isValidCourseMessage(data) {
+      return data.keys().hasAll(['courseId', 'text', 'uid', 'timestamp']) &&
+             data.courseId is string &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.uid is string &&
+             isValidDateString(data.timestamp);
+    }
+
+    function isValidReminder(data) {
+      return data.keys().hasAll(['title', 'uid']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.uid is string &&
+             (!('subtitle' in data) || data.subtitle is string) &&
+             (!('color' in data) || data.color is string) &&
+             (!('dueDate' in data) || data.dueDate is string);
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['title', 'uid']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.uid is string &&
+             (!('subtitle' in data) || data.subtitle is string) &&
+             (!('date' in data) || data.date is string) &&
+             (!('day' in data) || data.day is string) &&
+             (!('month' in data) || data.month is string) &&
+             (!('color' in data) || data.color is string) &&
+             (!('textColor' in data) || data.textColor is string);
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['title', 'uid']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.uid is string &&
+             (!('status' in data) || data.status in ['pending', 'completed']) &&
+             (!('courseId' in data) || data.courseId is string) &&
+             (!('dueDate' in data) || data.dueDate is string);
+    }
+
+    function isValidGroup(data) {
+      return data.keys().hasAll(['name', 'uid']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.uid is string &&
+             (!('description' in data) || data.description is string) &&
+             (!('members' in data) || data.members is list);
+    }
+
+    function isValidResource(data) {
+      return data.keys().hasAll(['title', 'type', 'url', 'courseId', 'uid']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.type in ['pdf', 'video', 'link'] &&
+             data.url is string && data.courseId is string &&
+             data.uid is string &&
+             (!('category' in data) || data.category is string);
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'student' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /courses/{courseId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidCourse(request.resource.data);
+      allow update: if isAdmin() && isValidCourse(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow read: if isOwner(resource.data.uid) || isAdmin();
+      allow create: if isRequestOwner() && isValidEnrollment(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isOwner(resource.data.uid) || isAdmin();
+    }
+
+    match /activities/{activityId} {
+      allow read: if isEnrolled(resource.data.courseId) || isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /course_messages/{messageId} {
+      allow read: if isEnrolled(resource.data.courseId) || isAdmin();
+      allow create: if isEnrolled(request.resource.data.courseId) && isRequestOwner() && isValidCourseMessage(request.resource.data);
+      allow update: if false; // Messages are immutable
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /reminders/{reminderId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isRequestOwner() && isValidReminder(request.resource.data);
+      allow update: if isDocOwner() && isValidReminder(request.resource.data) && request.resource.data.uid == resource.data.uid;
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isRequestOwner() && isValidEvent(request.resource.data);
+      allow update: if isDocOwner() && isValidEvent(request.resource.data) && request.resource.data.uid == resource.data.uid;
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isRequestOwner() && isValidTask(request.resource.data);
+      allow update: if isDocOwner() && isValidTask(request.resource.data) && request.resource.data.uid == resource.data.uid;
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /groups/{groupId} {
+      allow read: if isDocOwner() || isAdmin() || (isAuthenticated() && request.auth.uid in resource.data.members);
+      allow create: if isRequestOwner() && isValidGroup(request.resource.data);
+      allow update: if (isDocOwner() || (isAuthenticated() && request.auth.uid in resource.data.members)) && isValidGroup(request.resource.data);
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /resources/{resourceId} {
+      allow read: if isEnrolled(resource.data.courseId) || isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /materials/{materialId} {
+      allow read: if (isEnrolled(resource.data.courseId) || isAdmin()) && (isAdmin() || resource.data.published == true);
+      allow create: if isAdmin() && isValidMaterial(request.resource.data);
+      allow update: if isAdmin() && isValidMaterial(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isRequestOwner() && isValidSubmission(request.resource.data);
+      allow update: if isDocOwner() && isValidSubmission(request.resource.data) && request.resource.data.uid == resource.data.uid;
+      allow delete: if isDocOwner() || isAdmin();
+    }
+  }
+}
