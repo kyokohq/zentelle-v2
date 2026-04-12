@@ -13,12 +13,12 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
   app.use(cookieParser(process.env.SESSION_SECRET || "zentelle-secret"));
 
-  const appUrl = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const appUrl = (process.env.APP_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${appUrl}/auth/google/callback`;
 
   console.log("OAuth Redirect URI configured as:", redirectUri);

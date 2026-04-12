@@ -141,7 +141,9 @@
         "points": { "type": "number", "description": "Maximum points for the assignment" },
         "dueDate": { "type": "string", "format": "date-time" },
         "uid": { "type": "string", "description": "Creator UID" },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "timestamp": { "type": "string", "format": "date-time" },
+        "published": { "type": "boolean", "description": "Whether the material is visible to students" },
+        "order": { "type": "number", "description": "Display order of the material" }
       },
       "required": ["courseId", "type", "title", "uid", "timestamp"]
     },

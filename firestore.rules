@@ -103,7 +103,10 @@ service cloud.firestore {
              (!('url' in data) || data.url is string) &&
              (!('color' in data) || (data.color is string && data.color.matches("^#[0-9A-Fa-f]{6}$"))) &&
              (!('googleDriveFileId' in data) || data.googleDriveFileId is string) &&
-             (!('googleDriveTemplateId' in data) || data.googleDriveTemplateId is string);
+             (!('googleDriveTemplateId' in data) || data.googleDriveTemplateId is string) &&
+             (!('order' in data) || data.order is number) &&
+             (!('points' in data) || data.points is number) &&
+             (!('dueDate' in data) || data.dueDate == null || data.dueDate is string || data.dueDate is timestamp);
     }
 
     function isValidSubmission(data) {

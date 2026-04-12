@@ -110,6 +110,7 @@ export interface Material {
   uid: string;
   timestamp: any;
   published: boolean; // Added for publishing/unpublishing
+  order?: number;
 }
 
 export interface Submission {

@@ -32,7 +32,8 @@ import {
   Lock,
   Unlock,
   Cloud,
-  Copy
+  Copy,
+  GripVertical
 } from 'lucide-react';
 import { 
   collection, 
@@ -52,11 +53,216 @@ import {
 import { db, auth } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Material, Submission } from '../types';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  defaultDropAnimationSideEffects,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const COLORS = [
   '#004275', '#0078D4', '#00B7C3', '#107C10', '#D83B01', '#A4262C', '#5C2D91', '#002050',
   '#FFB900', '#E81123', '#B4009E', '#00188F', '#00BCF2', '#BAD80A', '#FF8C00', '#767676'
 ];
+
+function MaterialItem({ material, viewMode, isAdmin, courseId, handleNavigate, togglePublish, handleEditClick, setMaterialToDelete, setShowDeleteConfirm, getIcon }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: material.id, disabled: !isAdmin });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  if (viewMode === 'grid') {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="group"
+      >
+        <div className="bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all border border-gray-100 relative overflow-hidden h-full flex flex-col">
+          {material.type === 'folder' && (
+            <div 
+              className="absolute top-0 left-0 w-full h-1.5" 
+              style={{ backgroundColor: material.color || '#004275' }}
+            />
+          )}
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded text-gray-400">
+                  <GripVertical className="w-4 h-4" />
+                </div>
+              )}
+              <div className="p-3 bg-gray-50 rounded-2xl group-hover:scale-110 transition-transform relative">
+                {getIcon(material.type, material.color)}
+                {!material.published && isAdmin && (
+                  <div className="absolute -top-1 -right-1 bg-gray-500 text-white p-1 rounded-full shadow-sm" title="Unpublished">
+                    <Lock className="w-3 h-3" />
+                  </div>
+                )}
+              </div>
+            </div>
+            {isAdmin && (
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => togglePublish(material)}
+                  className={`p-2 rounded-full transition-colors ${material.published ? 'text-green-500 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                  title={material.published ? 'Unpublish' : 'Publish'}
+                >
+                  {material.published ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                </button>
+                <button 
+                  onClick={() => handleEditClick(material)}
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-[#004275]"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => {
+                    setMaterialToDelete(material.id);
+                    setShowDeleteConfirm(true);
+                  }}
+                  className="p-2 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={() => {
+              if (material.type === 'folder') {
+                handleNavigate(`/courses/${courseId}/materials/${material.id}`);
+              } else if (material.type === 'link' && material.url) {
+                window.open(material.url, '_blank');
+              } else if (material.type === 'file' && material.url) {
+                window.open(material.url, '_blank');
+              } else {
+                handleNavigate(`/courses/${courseId}/assignments/${material.id}`);
+              }
+            }}
+            className="block text-left w-full flex-grow"
+          >
+            <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-[#004275] transition-colors line-clamp-1">
+              {material.title}
+            </h3>
+            <p className="text-sm text-gray-500 line-clamp-2 min-h-[2.5rem]">
+              {material.description || 'No description provided.'}
+            </p>
+          </button>
+          <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-xs text-gray-400">
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {material.timestamp?.toDate ? material.timestamp.toDate().toLocaleDateString() : 'Just now'}
+            </div>
+            {material.type === 'assignment' && material.points && (
+              <div className="font-medium text-[#004275] bg-blue-50 px-2 py-0.5 rounded-full">
+                {material.points} pts
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-all border border-gray-100 flex items-center gap-4 group"
+    >
+      {isAdmin && (
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded text-gray-400">
+          <GripVertical className="w-4 h-4" />
+        </div>
+      )}
+      <div className="p-2 bg-gray-50 rounded-xl relative">
+        {getIcon(material.type, material.color)}
+        {!material.published && isAdmin && (
+          <div className="absolute -top-1 -right-1 bg-gray-500 text-white p-0.5 rounded-full shadow-sm" title="Unpublished">
+            <Lock className="w-2 h-2" />
+          </div>
+        )}
+      </div>
+      <button 
+        onClick={() => {
+          if (material.type === 'folder') {
+            handleNavigate(`/courses/${courseId}/materials/${material.id}`);
+          } else if (material.type === 'link' && material.url) {
+            window.open(material.url, '_blank');
+          } else if (material.type === 'file' && material.url) {
+            window.open(material.url, '_blank');
+          } else {
+            handleNavigate(`/courses/${courseId}/assignments/${material.id}`);
+          }
+        }}
+        className="flex-grow text-left"
+      >
+        <h3 className="font-bold text-gray-900 group-hover:text-[#004275] transition-colors">{material.title}</h3>
+        <p className="text-sm text-gray-500 line-clamp-1">{material.description}</p>
+      </button>
+      <div className="flex items-center gap-4">
+        {material.type === 'assignment' && material.points && (
+          <div className="hidden sm:block text-xs font-medium text-[#004275] bg-blue-50 px-2 py-0.5 rounded-full">
+            {material.points} pts
+          </div>
+        )}
+        {isAdmin && (
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button 
+              onClick={() => togglePublish(material)}
+              className={`p-2 rounded-full transition-colors ${material.published ? 'text-green-500 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+              title={material.published ? 'Unpublish' : 'Publish'}
+            >
+              {material.published ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            </button>
+            <button 
+              onClick={() => handleEditClick(material)}
+              className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-[#004275]"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => {
+                setMaterialToDelete(material.id);
+                setShowDeleteConfirm(true);
+              }}
+              className="p-2 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        <ChevronRight className="w-5 h-5 text-gray-300" />
+      </div>
+    </div>
+  );
+}
 
 export default function Materials({ 
   userRole, 
@@ -95,6 +301,18 @@ export default function Materials({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const isAdmin = userRole === 'admin';
 
@@ -160,6 +378,7 @@ export default function Materials({
       collection(db, 'materials'),
       where('courseId', '==', courseId),
       where('parentId', '==', folderId || null),
+      orderBy('order', 'asc'),
       orderBy('timestamp', 'desc')
     );
 
@@ -172,6 +391,58 @@ export default function Materials({
     return () => unsubscribe();
   }, [courseId, folderId]);
 
+  const handleDragStart = (event: any) => {
+    setActiveId(event.active.id);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || !isAdmin) return;
+
+    const activeMaterial = materials.find(m => m.id === active.id);
+    const overMaterial = materials.find(m => m.id === over.id);
+
+    if (!activeMaterial) return;
+
+    // 1. Check if dropped INTO a folder
+    if (overMaterial && overMaterial.type === 'folder' && active.id !== over.id) {
+      // Move into folder
+      try {
+        await updateDoc(doc(db, 'materials', activeMaterial.id), {
+          parentId: overMaterial.id,
+          order: 0 // Reset order in new folder
+        });
+        return;
+      } catch (error) {
+        console.error('Error moving material into folder:', error);
+      }
+    }
+
+    // 2. Reorder within the same level
+    if (active.id !== over.id) {
+      const oldIndex = materials.findIndex(m => m.id === active.id);
+      const newIndex = materials.findIndex(m => m.id === over.id);
+
+      const newMaterials = arrayMove(materials, oldIndex, newIndex);
+      setMaterials(newMaterials);
+
+      // Update all orders in Firestore
+      const batch = writeBatch(db);
+      newMaterials.forEach((m, index) => {
+        const materialRef = doc(db, 'materials', m.id);
+        batch.update(materialRef, { order: index });
+      });
+
+      try {
+        await batch.commit();
+      } catch (error) {
+        console.error('Error updating material order:', error);
+      }
+    }
+  };
+
   const handleAddMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser || !courseId) return;
@@ -183,6 +454,9 @@ export default function Materials({
       title: newMaterialTitle,
       description: newMaterialDescription,
       uid: auth.currentUser.uid,
+      order: materials.length,
+      timestamp: serverTimestamp(),
+      published: true,
     };
 
     if (newMaterialType === 'folder') {
@@ -433,155 +707,60 @@ export default function Materials({
           )}
         </div>
       ) : (
+        isAdmin ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" : "space-y-3"}>
+            <SortableContext
+              items={filteredMaterials.map(m => m.id)}
+              strategy={viewMode === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
+            >
+              <AnimatePresence mode="popLayout">
+                {filteredMaterials.map((material) => (
+                  <MaterialItem
+                    key={material.id}
+                    material={material}
+                    viewMode={viewMode}
+                    isAdmin={isAdmin}
+                    courseId={courseId}
+                    handleNavigate={handleNavigate}
+                    togglePublish={togglePublish}
+                    handleEditClick={handleEditClick}
+                    setMaterialToDelete={setMaterialToDelete}
+                    setShowDeleteConfirm={setShowDeleteConfirm}
+                    getIcon={getIcon}
+                  />
+                ))}
+              </AnimatePresence>
+            </SortableContext>
+          </div>
+        </DndContext>
+      ) : (
         <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" : "space-y-3"}>
           <AnimatePresence mode="popLayout">
             {filteredMaterials.map((material) => (
-              <motion.div
+              <MaterialItem
                 key={material.id}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className={viewMode === 'grid' ? "group" : ""}
-              >
-                {viewMode === 'grid' ? (
-                  <div className="bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all border border-gray-100 relative overflow-hidden">
-                    {material.type === 'folder' && (
-                      <div 
-                        className="absolute top-0 left-0 w-full h-1.5" 
-                        style={{ backgroundColor: material.color || '#004275' }}
-                      />
-                    )}
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-3 bg-gray-50 rounded-2xl group-hover:scale-110 transition-transform relative">
-                        {getIcon(material.type, material.color)}
-                        {!material.published && isAdmin && (
-                          <div className="absolute -top-1 -right-1 bg-gray-500 text-white p-1 rounded-full shadow-sm" title="Unpublished">
-                            <Lock className="w-3 h-3" />
-                          </div>
-                        )}
-                      </div>
-                      {isAdmin && (
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => togglePublish(material)}
-                            className={`p-2 rounded-full transition-colors ${material.published ? 'text-green-500 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                            title={material.published ? 'Unpublish' : 'Publish'}
-                          >
-                            {material.published ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                          </button>
-                          <button 
-                            onClick={() => handleEditClick(material)}
-                            className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-[#004275]"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setMaterialToDelete(material.id);
-                              setShowDeleteConfirm(true);
-                            }}
-                            className="p-2 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <button 
-                      onClick={() => {
-                        if (material.type === 'folder') {
-                          handleNavigate(`/courses/${courseId}/materials/${material.id}`);
-                        } else if (material.type === 'link' && material.url) {
-                          window.open(material.url, '_blank');
-                        } else if (material.type === 'file' && material.url) {
-                          window.open(material.url, '_blank');
-                        } else {
-                          handleNavigate(`/courses/${courseId}/assignments/${material.id}`);
-                        }
-                      }}
-                      className="block text-left w-full"
-                    >
-                      <h3 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-[#004275] transition-colors line-clamp-1">
-                        {material.title}
-                      </h3>
-                      <p className="text-sm text-gray-500 line-clamp-2 min-h-[2.5rem]">
-                        {material.description || 'No description provided.'}
-                      </p>
-                    </button>
-                    <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-xs text-gray-400">
-                      <span className="flex items-center gap-1 uppercase tracking-wider font-bold">
-                        {material.type}
-                      </span>
-                      <span>{new Date(material.timestamp?.toDate()).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-all border border-gray-100 flex items-center gap-4 group">
-                    <div className="p-2 bg-gray-50 rounded-xl relative">
-                      {getIcon(material.type, material.color)}
-                      {!material.published && isAdmin && (
-                        <div className="absolute -top-1 -right-1 bg-gray-500 text-white p-0.5 rounded-full shadow-sm" title="Unpublished">
-                          <Lock className="w-2 h-2" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <button 
-                        onClick={() => {
-                          if (material.type === 'folder') {
-                            handleNavigate(`/courses/${courseId}/materials/${material.id}`);
-                          } else if (material.type === 'link' && material.url) {
-                            window.open(material.url, '_blank');
-                          } else if (material.type === 'file' && material.url) {
-                            window.open(material.url, '_blank');
-                          } else {
-                            handleNavigate(`/courses/${courseId}/assignments/${material.id}`);
-                          }
-                        }}
-                        className="text-lg font-bold text-gray-900 hover:text-[#004275] transition-colors truncate block text-left w-full"
-                      >
-                        {material.title}
-                      </button>
-                      <p className="text-sm text-gray-500 truncate">{material.description}</p>
-                    </div>
-                    <div className="hidden md:flex items-center gap-6 text-sm text-gray-400 px-4">
-                      <span className="uppercase tracking-wider font-bold">{material.type}</span>
-                      <span>{new Date(material.timestamp?.toDate()).toLocaleDateString()}</span>
-                    </div>
-                    {isAdmin && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => togglePublish(material)}
-                          className={`p-2 rounded-full transition-colors ${material.published ? 'text-green-500 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                          title={material.published ? 'Unpublish' : 'Publish'}
-                        >
-                          {material.published ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                        </button>
-                        <button 
-                          onClick={() => handleEditClick(material)}
-                          className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-[#004275]"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setMaterialToDelete(material.id);
-                            setShowDeleteConfirm(true);
-                          }}
-                          className="p-2 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </motion.div>
+                material={material}
+                viewMode={viewMode}
+                isAdmin={isAdmin}
+                courseId={courseId}
+                handleNavigate={handleNavigate}
+                togglePublish={togglePublish}
+                handleEditClick={handleEditClick}
+                setMaterialToDelete={setMaterialToDelete}
+                setShowDeleteConfirm={setShowDeleteConfirm}
+                getIcon={getIcon}
+              />
             ))}
           </AnimatePresence>
         </div>
-      )}
+      )
+    )}
 
       {/* Add Material Modal */}
       {showAddModal && (
