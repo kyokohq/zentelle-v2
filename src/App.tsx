@@ -40,6 +40,7 @@ import {
 } from './types';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
+import { Auth } from './components/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { Courses } from './pages/Courses';
 import { CourseDetail } from './pages/CourseDetail';
@@ -274,15 +275,6 @@ function ZentelleApp() {
     }
   };
 
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Login failed:', error);
-    }
-  };
-
   const handleJoinCourse = async (courseCode: string) => {
     if (!user) return;
     try {
@@ -449,16 +441,12 @@ function ZentelleApp() {
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#f9f9f9] p-4">
-        <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-md w-full text-center">
-          <h1 className="text-4xl font-black text-[#004275] mb-4 font-headline">Zentelle</h1>
-          <p className="text-gray-600 mb-8">Your modern educational dashboard. Please sign in to continue.</p>
-          <button 
-            onClick={handleLogin}
-            className="flex items-center justify-center gap-3 w-full bg-[#004275] text-white py-4 rounded-2xl font-bold hover:bg-[#005a9c] transition-all active:scale-95 shadow-lg"
-          >
-            <LogIn className="w-5 h-5" />
-            Sign in with Google
-          </button>
+        <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-md w-full">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-black text-[#004275] mb-4 font-headline">Zentelle</h1>
+            <p className="text-gray-600">Your modern educational dashboard. Please sign in to continue.</p>
+          </div>
+          <Auth />
         </div>
       </div>
     );

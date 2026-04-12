@@ -57,4 +57,8 @@ This app uses Google OAuth for Drive integration. If you are running locally:
 
 This app uses Firebase for authentication and data storage. If you are running this locally for the first time:
 - Ensure your `firebase-applet-config.json` contains valid credentials.
+- **Enable Authentication Methods**: Go to the Firebase Console, select your project, and under **Authentication > Sign-in method**, enable:
+  - **Google** (already used for Drive integration)
+  - **Email/Password**
+  - **Phone**
 - If you see permission errors, you may need to deploy the `firestore.rules` to your Firebase project.
