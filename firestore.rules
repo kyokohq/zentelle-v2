@@ -142,10 +142,49 @@ service cloud.firestore {
              (!('textSubmission' in data) || data.textSubmission == null || data.textSubmission is string) &&
              (!('grade' in data) || data.grade is number) &&
              (!('feedback' in data) || data.feedback is string) &&
+             (!('markupData' in data) || data.markupData is string) &&
              (!('staidentId' in data) || data.staidentId == null || data.staidentId is string) &&
              (!('studentName' in data) || data.studentName is string) &&
              (!('isSimulated' in data) || data.isSimulated is bool) &&
              (!('simulationExplanation' in data) || data.simulationExplanation is string);
+    }
+
+    function isValidQuiz(data) {
+      return data.keys().hasAll(['title', 'courseId', 'uid']) &&
+             data.title is string && data.title.size() > 0 &&
+             data.courseId is string &&
+             data.uid is string &&
+             (!('description' in data) || data.description is string) &&
+             (!('timeLimit' in data) || data.timeLimit is number) &&
+             (!('points' in data) || data.points is number) &&
+             (!('published' in data) || data.published is bool) &&
+             (!('timestamp' in data) || data.timestamp is timestamp);
+    }
+
+    function isValidQuizQuestion(data) {
+      return data.keys().hasAll(['quizId', 'type', 'question']) &&
+             data.quizId is string &&
+             data.type in ['multiple-choice', 'checkbox', 'matching', 'image-hotspot', 'short-answer'] &&
+             data.question is string &&
+             (!('imageUrl' in data) || data.imageUrl is string) &&
+             (!('options' in data) || data.options is list) &&
+             (!('correctAnswer' in data) || data.correctAnswer is string) &&
+             (!('correctAnswers' in data) || data.correctAnswers is list) &&
+             (!('matchingPairs' in data) || data.matchingPairs is map) &&
+             (!('hotspots' in data) || data.hotspots is list) &&
+             (!('order' in data) || data.order is number);
+    }
+
+    function isValidQuizSubmission(data) {
+      return data.keys().hasAll(['quizId', 'uid', 'status']) &&
+             data.quizId is string &&
+             data.uid is string &&
+             data.status in ['in-progress', 'submitted'] &&
+             (!('staidentId' in data) || data.staidentId is string) &&
+             (!('isSimulated' in data) || data.isSimulated is bool) &&
+             (!('answers' in data) || data.answers is map) &&
+             (!('score' in data) || data.score is number) &&
+             (!('timestamp' in data) || data.timestamp is timestamp);
     }
 
     function isValidStaident(data) {
@@ -394,6 +433,27 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isStaff() && isValidStaident(request.resource.data);
       allow update: if isStaff() && isValidStaident(request.resource.data);
+      allow delete: if isStaff();
+    }
+
+    match /quizzes/{quizId} {
+      allow read: if (isEnrolled(resource.data.courseId) || isStaff()) && (isStaff() || resource.data.published == true);
+      allow create: if isStaff() && isValidQuiz(request.resource.data);
+      allow update: if isStaff() && isValidQuiz(request.resource.data);
+      allow delete: if isStaff();
+    }
+
+    match /quiz_questions/{questionId} {
+      allow read: if isAuthenticated(); // Questions need to be fetched for the quiz player
+      allow create: if isStaff() && isValidQuizQuestion(request.resource.data);
+      allow update: if isStaff() && isValidQuizQuestion(request.resource.data);
+      allow delete: if isStaff();
+    }
+
+    match /quiz_submissions/{submissionId} {
+      allow read: if isDocOwner() || isStaff();
+      allow create: if (isRequestOwner() || isStaff()) && isValidQuizSubmission(request.resource.data);
+      allow update: if (isDocOwner() || isStaff()) && isValidQuizSubmission(request.resource.data) && (isStaff() || request.resource.data.uid == resource.data.uid);
       allow delete: if isStaff();
     }
 

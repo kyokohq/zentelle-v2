@@ -9,8 +9,15 @@ import {
   updateDoc,
   deleteDoc
 } from 'firebase/firestore';
+import { GoogleGenAI, Type } from "@google/genai";
+import { v4 as uuidv4 } from 'uuid';
 import { db, auth } from '../firebase';
-import { Staident, Material, Submission, UserProfile } from '../types';
+import { Staident, Material, Submission, UserProfile, QuizQuestion, QuizSubmission } from '../types';
+
+// Initialize Gemini AI
+const ai = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY || '' 
+});
 
 const PERSONALITIES = [
   "Curious and eager to learn, but sometimes overthinks simple questions.",
@@ -110,23 +117,121 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await fetch('/api/ai/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt }),
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
       });
       
-      if (!response.ok) {
-        throw new Error('Failed to generate content');
-      }
-      
-      const data = await response.json();
-      return data.text || "I tried my best but was a bit confused by the prompt.";
+      return response.text || "I tried my best but was a bit confused by the prompt.";
     } catch (error) {
       console.error("Gemini Error:", error);
       return "Student failed to generate content due to an internal error.";
+    }
+  },
+
+  async generateMarkupContent(assignment: Material, staident: Staident) {
+    const prompt = `
+      Create a realistic set of "markup" entries for a worksheet assignment.
+      The output MUST be a JSON array of objects, where each object represents a Fabric.js element (TextBox).
+      
+      Assignment Title: ${assignment.title}
+      Student Profile: ${staident.name} (Level: ${staident.skillLevel})
+      
+      Requirements:
+      1. Generate 3-5 short text entries that a student would write on a digital worksheet.
+      2. The text should be appropriate for the student's skill level.
+      3. Use random positions: left between 50-600, top between 50-800.
+      
+      Output ONLY a JSON array of objects with this schema:
+      {
+        "type": "i-text",
+        "text": string,
+        "left": number,
+        "top": number,
+        "fontSize": number (16-24),
+        "fontFamily": "Inter",
+        "fill": "#004275"
+      }
+    `;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING },
+                text: { type: Type.STRING },
+                left: { type: Type.NUMBER },
+                top: { type: Type.NUMBER },
+                fontSize: { type: Type.NUMBER },
+                fontFamily: { type: Type.STRING },
+                fill: { type: Type.STRING }
+              },
+              required: ["type", "text", "left", "top"]
+            }
+          }
+        }
+      });
+      
+      const objects = JSON.parse(response.text || "[]");
+      // Add version and background container expected by Fabric 6 JSON
+      return JSON.stringify({
+        version: "6.0.0",
+        objects: objects.map((obj: any) => ({
+          ...obj,
+          version: "6.0.0",
+          originX: "left",
+          originY: "top"
+        }))
+      });
+    } catch (error) {
+      console.error("Gemini Markup Error:", error);
+      return JSON.stringify({ version: "6.0.0", objects: [] });
+    }
+  },
+
+  async generateQuizSubmission(quiz: Material, questions: QuizQuestion[], staident: Staident) {
+    const prompt = `
+      Simulate a student taking a quiz.
+      Quiz Title: ${quiz.title}
+      Questions: ${JSON.stringify(questions.map(q => ({ id: q.id, type: q.type, question: q.question, options: q.options })))}
+      
+      Student Profile:
+      - Name: ${staident.name}
+      - Skill Level: ${staident.skillLevel}
+      
+      Requirements:
+      1. Provide a realistic set of answers for this student.
+      2. Match the skill level (exceptional = mostly correct, average = some mistakes, low = many mistakes or random guesses).
+      3. For multiple-choice/checkbox: return the selected option(s) as strings.
+      4. For short-answer: return a brief text response.
+      5. For matching/hotspot types: return a plausible set of labels or pairs.
+      6. Return ONLY a JSON object where keys are question IDs and values are the answers.
+    `;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            additionalProperties: { type: Type.STRING } 
+          }
+        }
+      });
+      
+      return JSON.parse(response.text || "{}");
+    } catch (error) {
+      console.error("Gemini Quiz Error:", error);
+      return {};
     }
   },
 
@@ -138,6 +243,8 @@ export const StaidentService = {
         let status: 'submitted' | 'draft' = 'submitted';
         let explanation = "";
         let content = "";
+        let markupData = "";
+        let quizAnswers: Record<string, any> = {};
 
         if (roll < 0.1) { // 10% chance to forget/missing
           status = 'draft';
@@ -145,8 +252,52 @@ export const StaidentService = {
         } else if (roll < 0.2) { // 10% chance to be confused
           content = "I didn't really understand how to start this project... I'm sorry.";
           explanation = "Student appeared confused by the instructions.";
+        } else if (assignment.type === 'quiz') {
+          // Load questions first
+          const qSnap = await getDocs(query(collection(db, 'quiz_questions'), where('quizId', '==', assignment.id)));
+          const questions = qSnap.docs.map(d => ({ id: d.id, ...d.data() } as QuizQuestion));
+          quizAnswers = await this.generateQuizSubmission(assignment, questions, staident);
+          
+          // Calculate score internally for simulation
+          let correct = 0;
+          questions.forEach(q => {
+            if (quizAnswers[q.id] === q.correctAnswer) correct++;
+          });
+          const score = Math.round((correct / questions.length) * 100);
+
+          const qSub: Partial<QuizSubmission> = {
+            quizId: assignment.id,
+            uid: `staident_${staident.id}`,
+            staidentId: staident.id,
+            answers: quizAnswers,
+            score,
+            status: 'submitted',
+            isSimulated: true,
+            timestamp: serverTimestamp()
+          };
+          await addDoc(collection(db, 'quiz_submissions'), qSub);
+          
+          // Also record in main submissions for the list
+          const subData = {
+            materialId: assignment.id,
+            uid: `staident_${staident.id}`,
+            staidentId: staident.id,
+            studentName: staident.name,
+            grade: score,
+            isSimulated: true,
+            status: 'submitted',
+            timestamp: serverTimestamp(),
+            submittedAt: serverTimestamp()
+          };
+          await addDoc(collection(db, 'submissions'), subData);
+          resolve(subData);
+          return;
         } else {
           content = await this.generateSubmissionContent(assignment, staident);
+          // If it's a worksheet or has a URL, generate markup
+          if (assignment.type === 'worksheet' || assignment.url) {
+            markupData = await this.generateMarkupContent(assignment, staident);
+          }
         }
 
         const submissionData = {
@@ -157,6 +308,7 @@ export const StaidentService = {
           isSimulated: true,
           simulationExplanation: explanation,
           textSubmission: content,
+          markupData,
           status,
           timestamp: serverTimestamp(),
           submittedAt: serverTimestamp()
@@ -167,17 +319,6 @@ export const StaidentService = {
           resolve(submissionData);
         } catch (error) {
           console.error("Submission error:", error);
-          // Standardized error handling for debugging
-          const errInfo = {
-            error: error instanceof Error ? error.message : String(error),
-            authInfo: {
-              userId: auth.currentUser?.uid,
-              email: auth.currentUser?.email
-            },
-            operationType: 'create',
-            path: 'submissions'
-          };
-          console.error('Firestore Error Detail: ', JSON.stringify(errInfo));
           resolve(null);
         }
       }, delayMs);
@@ -221,18 +362,12 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await fetch('/api/ai/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt }),
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
       });
       
-      if (!response.ok) throw new Error('Failed to generate response');
-      
-      const data = await response.json();
-      return data.text || "I'm not sure how to respond to that.";
+      return response.text || "I'm not sure how to respond to that.";
     } catch (error) {
       console.error("Gemini Error:", error);
       return "The student is unable to respond right now.";

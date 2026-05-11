@@ -10,7 +10,8 @@ import {
   RotateCcw,
   MousePointer2,
   Send,
-  Loader2
+  Loader2,
+  CheckSquare
 } from 'lucide-react';
 import { 
   collection, 
@@ -113,6 +114,21 @@ export function QuizPlayer({ quizId, onClose }: QuizPlayerProps) {
         if (q.type === 'image-hotspot') {
           const hotspot = q.hotspots?.find(h => h.label === studentAnswer);
           if (hotspot?.isCorrect) correctCount++;
+        } else if (q.type === 'checkbox') {
+          const studentAnswers = studentAnswer as string[] || [];
+          const correctAnswers = q.correctAnswers || [];
+          const isCorrect = studentAnswers.length === correctAnswers.length && 
+                           studentAnswers.every(a => correctAnswers.includes(a));
+          if (isCorrect) correctCount++;
+        } else if (q.type === 'matching') {
+          const studentMatches = studentAnswer as Record<string, string> || {};
+          const correctPairs = q.matchingPairs || {};
+          const totalPairs = Object.keys(correctPairs).length;
+          let pairCorrect = 0;
+          Object.entries(correctPairs).forEach(([k, v]) => {
+            if (studentMatches[k] === v) pairCorrect++;
+          });
+          if (pairCorrect === totalPairs) correctCount++;
         } else if (q.type === 'multiple-choice' || q.type === 'short-answer') {
           if (studentAnswer?.toLowerCase().trim() === q.correctAnswer?.toLowerCase().trim()) {
             correctCount++;
@@ -268,6 +284,48 @@ export function QuizPlayer({ quizId, onClose }: QuizPlayerProps) {
                     </div>
                   )}
 
+                  {currentQuestion?.type === 'checkbox' && (
+                    <div className="grid grid-cols-1 gap-4">
+                      {currentQuestion.options?.map((opt, i) => {
+                        const isSelected = (answers[currentQuestion.id] || []).includes(opt);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              const current = answers[currentQuestion.id] || [];
+                              const newAnswers = isSelected 
+                                ? current.filter((a: string) => a !== opt)
+                                : [...current, opt];
+                              handleAnswerChange(newAnswers);
+                            }}
+                            className={`w-full text-left p-6 rounded-3xl border-2 transition-all flex items-center justify-between group ${
+                              isSelected 
+                                ? 'border-[#004275] bg-[#004275]/5 shadow-md' 
+                                : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span className={`text-lg font-bold ${isSelected ? 'text-[#004275]' : 'text-gray-700'}`}>
+                              {opt}
+                            </span>
+                            <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${
+                              isSelected ? 'border-[#004275] bg-[#004275] text-white' : 'border-gray-200'
+                            }`}>
+                              {isSelected && <CheckSquare className="w-5 h-5" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {currentQuestion?.type === 'matching' && (
+                    <MatchingPlayer 
+                      question={currentQuestion} 
+                      answer={answers[currentQuestion.id]} 
+                      onChange={handleAnswerChange} 
+                    />
+                  )}
+
                   {currentQuestion?.type === 'short-answer' && (
                     <textarea 
                       value={answers[currentQuestion.id] || ''}
@@ -388,5 +446,60 @@ export function QuizPlayer({ quizId, onClose }: QuizPlayerProps) {
         </div>
       </main>
     </div>
+  );
+}
+
+function MatchingPlayer({ question, answer, onChange }: { question: QuizQuestion, answer: Record<string, string>, onChange: (val: Record<string, string>) => void }) {
+  const pairs = question.matchingPairs || {};
+  const leftItems = Object.keys(pairs);
+  const rightItems = Array.from(new Set(Object.values(pairs))).sort(() => Math.random() - 0.5);
+  const currentAnswers = answer || {};
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+       <div className="space-y-4">
+         <h4 className="text-xs font-black uppercase tracking-widest text-gray-400">Items</h4>
+         {leftItems.map((item, i) => (
+           <div key={i} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 font-bold text-gray-700">
+             {item}
+           </div>
+         ))}
+       </div>
+       <div className="space-y-4">
+         <h4 className="text-xs font-black uppercase tracking-widest text-gray-400">Match To</h4>
+         {leftItems.map((item, i) => (
+           <select
+             key={i}
+             value={currentAnswers[item] || ''}
+             onChange={(e) => onChange({ ...currentAnswers, [item]: e.target.value })}
+             className="w-full p-4 bg-white border-2 border-gray-100 rounded-2xl font-bold text-[#004275] outline-none focus:ring-2 focus:ring-[#004275] transition-all"
+           >
+             <option value="">Select a match...</option>
+             {rightItems.map((opt, j) => (
+               <option key={j} value={opt}>{opt}</option>
+             ))}
+           </select>
+         ))}
+       </div>
+    </div>
+  );
+}
+
+function Loader2(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </svg>
   );
 }

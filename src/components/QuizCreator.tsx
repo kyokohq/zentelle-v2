@@ -214,6 +214,7 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
             <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">Questions</h3>
             <div className="grid grid-cols-2 gap-2">
               <AddQuestionBtn label="Choice" icon={CheckSquare} onClick={() => addQuestion('multiple-choice')} />
+              <AddQuestionBtn label="Checkmarks" icon={CheckSquare} onClick={() => addQuestion('checkbox')} />
               <AddQuestionBtn label="Hotspot" icon={Target} onClick={() => addQuestion('image-hotspot')} />
               <AddQuestionBtn label="Short" icon={Type} onClick={() => addQuestion('short-answer')} />
               <AddQuestionBtn label="Match" icon={List} onClick={() => addQuestion('matching')} />
@@ -286,6 +287,13 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
                     />
                   )}
 
+                  {questions[selectedQuestionIndex].type === 'checkbox' && (
+                    <CheckboxEditor 
+                      question={questions[selectedQuestionIndex]} 
+                      onUpdate={(updates) => updateQuestion(selectedQuestionIndex, updates)} 
+                    />
+                  )}
+
                   {questions[selectedQuestionIndex].type === 'short-answer' && (
                     <div className="p-8 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 text-center">
                       <p className="text-gray-400 font-bold italic">Students will provide a text-based response here.</p>
@@ -352,28 +360,91 @@ function ChoiceEditor({ question, onUpdate }: { question: Partial<QuizQuestion>,
 
   return (
     <div className="space-y-4">
-      <label className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 block">Answer Options</label>
+      <label className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 block">Answer Options (Select One Correct)</label>
       <div className="space-y-2">
         {question.options?.map((opt, idx) => (
           <div key={idx} className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => onUpdate({ correctAnswer: opt })}
-              className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+              className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${
                 question.correctAnswer === opt ? 'border-green-500 bg-green-500' : 'border-gray-200'
               }`}
             >
-              {question.correctAnswer === opt && <Plus className="w-4 h-4 text-white" />}
+              {question.correctAnswer === opt && <Plus className="w-5 h-5 text-white" />}
             </button>
             <input 
               type="text"
               value={opt}
               onChange={(e) => updateOption(idx, e.target.value)}
               placeholder={`Option ${idx + 1}`}
-              className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#004275]/10 outline-none transition-all"
+              className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-[#004275]/10 outline-none transition-all font-bold"
             />
             <button onClick={() => removeOption(idx)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button 
+        onClick={addOption}
+        className="flex items-center gap-2 text-[#004275] font-bold text-sm hover:underline p-2"
+      >
+        <Plus className="w-4 h-4" />
+        Add Option
+      </button>
+    </div>
+  );
+}
+
+function CheckboxEditor({ question, onUpdate }: { question: Partial<QuizQuestion>, onUpdate: (updates: Partial<QuizQuestion>) => void }) {
+  const addOption = () => {
+    onUpdate({ options: [...(question.options || []), ''] });
+  };
+
+  const removeOption = (idx: number) => {
+    onUpdate({ options: (question.options || []).filter((_, i) => i !== idx) });
+  };
+
+  const updateOption = (idx: number, text: string) => {
+    const newOptions = [...(question.options || [])];
+    newOptions[idx] = text;
+    onUpdate({ options: newOptions });
+  };
+
+  const toggleAnswer = (opt: string) => {
+    const current = question.correctAnswers || [];
+    if (current.includes(opt)) {
+      onUpdate({ correctAnswers: current.filter(a => a !== opt) });
+    } else {
+      onUpdate({ correctAnswers: [...current, opt] });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <label className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 block">Answer Options (Select All Correct)</label>
+      <div className="space-y-2">
+        {question.options?.map((opt, idx) => (
+          <div key={idx} className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => toggleAnswer(opt)}
+              className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${
+                question.correctAnswers?.includes(opt) ? 'border-green-500 bg-green-500' : 'border-gray-200'
+              }`}
+            >
+              {question.correctAnswers?.includes(opt) && <CheckSquare className="w-5 h-5 text-white" />}
+            </button>
+            <input 
+              type="text"
+              value={opt}
+              onChange={(e) => updateOption(idx, e.target.value)}
+              placeholder={`Option ${idx + 1}`}
+              className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm focus:ring-2 focus:ring-[#004275]/10 outline-none transition-all font-bold"
+            />
+            <button onClick={() => removeOption(idx)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+              <Trash2 className="w-5 h-5" />
             </button>
           </div>
         ))}

@@ -831,7 +831,7 @@ export default function Materials({
             </div>
 
             <form onSubmit={handleAddMaterial} className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {[
                   { id: 'folder', label: 'Folder', icon: FolderPlus, color: 'text-blue-600' },
                   { id: 'assignment', label: 'Assignment', icon: FilePlus, color: 'text-orange-600' },
@@ -858,30 +858,30 @@ export default function Materials({
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Title</label>
+                  <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Title</label>
                   <input 
                     type="text" 
                     required
                     value={newMaterialTitle}
                     onChange={(e) => setNewMaterialTitle(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
+                    className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all font-bold"
                     placeholder={`Enter ${newMaterialType} title...`}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Description (Optional)</label>
+                  <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Description (Optional)</label>
                   <textarea 
                     value={newMaterialDescription}
                     onChange={(e) => setNewMaterialDescription(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all resize-none h-24"
-                    placeholder="Add some details about this material..."
+                    className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all resize-none h-24"
+                    placeholder={newMaterialType === 'worksheet' ? "Add instructions for completing the worksheet..." : "Add some details about this material..."}
                   />
                 </div>
 
                 {newMaterialType === 'folder' && (
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-3">Folder Color</label>
+                    <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Folder Color</label>
                     <div className="grid grid-cols-8 gap-2">
                       {COLORS.map((color) => (
                         <button
@@ -902,13 +902,13 @@ export default function Materials({
 
                 {newMaterialType === 'link' && (
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">URL</label>
+                    <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">URL</label>
                     <input 
                       type="url" 
                       required
                       value={newMaterialLink}
                       onChange={(e) => setNewMaterialLink(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
+                      className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
                       placeholder="https://example.com"
                     />
                   </div>
@@ -916,6 +916,9 @@ export default function Materials({
 
                 {(newMaterialType === 'file' || newMaterialType === 'worksheet') && (
                   <div className="space-y-4">
+                    <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
+                       {newMaterialType === 'worksheet' ? 'Upload Worksheet (Image/PDF)' : 'Upload File'}
+                    </label>
                     <div className="p-8 border-2 border-dashed border-gray-200 rounded-[32px] bg-gray-50/50 hover:border-[#004275]/20 hover:bg-[#004275]/5 transition-all text-center group cursor-pointer relative">
                       <input 
                         type="file" 
@@ -934,7 +937,7 @@ export default function Materials({
                           </div>
                           <div>
                             <p className="text-lg font-black text-gray-900 font-headline">
-                              {newMaterialFile ? 'File Selected' : 'Upload Worksheet Image'}
+                              {newMaterialFile ? 'File Selected' : (newMaterialType === 'worksheet' ? 'Select Worksheet Image' : 'Click to Upload')}
                             </p>
                             <p className="text-sm text-gray-500 font-medium">Click to select or drag and drop</p>
                           </div>
@@ -944,112 +947,90 @@ export default function Materials({
                   </div>
                 )}
 
-                {(newMaterialType === 'assignment' || newMaterialType === 'quiz') && (
+                {(newMaterialType === 'assignment' || newMaterialType === 'quiz' || newMaterialType === 'worksheet') && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Points</label>
+                        <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Max Points</label>
                         <input 
                           type="number" 
                           value={newMaterialPoints}
                           onChange={(e) => setNewMaterialPoints(parseInt(e.target.value))}
-                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
+                          className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
                           placeholder="Max points..."
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Due Date</label>
+                        <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Due Date</label>
                         <input 
-                          type="datetime-local" 
+                          type="date" 
                           value={newMaterialDueDate}
                           onChange={(e) => setNewMaterialDueDate(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
+                          className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
                         />
                       </div>
                     </div>
 
-                    <div className={`p-6 rounded-2xl border transition-all ${isGoogleAuth ? 'bg-green-50 border-green-100' : 'bg-blue-50 border-blue-100'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${isGoogleAuth ? 'bg-green-600' : 'bg-blue-600'}`}>
-                          <Cloud className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h4 className={`font-bold ${isGoogleAuth ? 'text-green-900' : 'text-blue-900'}`}>Drive Integration</h4>
-                          <p className={`text-xs ${isGoogleAuth ? 'text-green-700' : 'text-blue-700'}`}>
-                            {isGoogleAuth ? 'Connected to Google Drive' : 'Connect a template to automatically create copies for students.'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {isGoogleAuth ? (
-                          <button 
-                            type="button"
-                            onClick={handleGoogleLogout}
-                            className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition-all text-sm"
-                          >
-                            Disconnect
-                          </button>
-                        ) : (
-                          <button 
-                            type="button"
-                            onClick={handleGoogleLogin}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all text-sm"
-                          >
-                            Connect
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {isGoogleAuth && (
-                      <div className="space-y-3">
-                        <label className="block text-sm font-bold text-green-900">Google Drive Template ID</label>
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            value={newMaterialTemplateId}
-                            onChange={(e) => setNewMaterialTemplateId(e.target.value)}
-                            className="flex-1 px-4 py-2 bg-white border border-green-200 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all"
-                            placeholder="Paste Google Drive File ID..."
-                          />
-                          <button 
-                            type="button"
-                            className="px-4 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all flex items-center gap-2"
-                          >
-                            <Search className="w-4 h-4" />
-                            Browse
-                          </button>
-                        </div>
-                        <div className="flex gap-2 p-1 bg-white/50 rounded-xl border border-green-100">
-                          {[
-                            { id: 'document', label: 'Google Doc (DOCX)', icon: FileText },
-                            { id: 'presentation', label: 'Google Slides (PPTX)', icon: Eye },
-                            { id: 'spreadsheet', label: 'Google Sheets (XLSX)', icon: ListIcon }
-                          ].map((type) => (
-                            <button
-                              key={type.id}
+                    {(newMaterialType === 'assignment' || newMaterialType === 'quiz') && (
+                      <div className={`p-6 rounded-3xl border transition-all ${isGoogleAuth ? 'bg-green-50 border-green-100' : 'bg-blue-50 border-blue-100'}`}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${isGoogleAuth ? 'bg-green-600' : 'bg-blue-600'}`}>
+                              <Cloud className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className={`font-bold ${isGoogleAuth ? 'text-green-900' : 'text-blue-900'}`}>Drive Template</h4>
+                              <p className={`text-xs ${isGoogleAuth ? 'text-green-700' : 'text-blue-700'}`}>
+                                {isGoogleAuth ? 'Students will get a copy of this file.' : 'Connect to use Google Drive templates.'}
+                              </p>
+                            </div>
+                          </div>
+                          {!isGoogleAuth && (
+                             <button 
                               type="button"
-                              onClick={() => setNewMaterialTemplateType(type.id as any)}
-                              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                newMaterialTemplateType === type.id 
-                                  ? 'bg-green-600 text-white shadow-sm' 
-                                  : 'text-green-700 hover:bg-green-100/50'
-                              }`}
+                              onClick={handleGoogleLogin}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all text-sm"
                             >
-                              <type.icon className="w-3 h-3" />
-                              {type.label}
+                              Connect
                             </button>
-                          ))}
+                          )}
                         </div>
-                        <p className="text-[10px] text-green-600">
-                          Tip: Open your file, the ID is the long string between /d/ and /edit in the URL.
-                        </p>
+                        {isGoogleAuth && (
+                          <div className="space-y-3">
+                            <input 
+                              type="text" 
+                              value={newMaterialTemplateId}
+                              onChange={(e) => setNewMaterialTemplateId(e.target.value)}
+                              className="w-full px-4 py-3 bg-white border border-green-200 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all text-sm"
+                              placeholder="Paste Google Drive File ID..."
+                            />
+                            <div className="flex gap-2 p-1 bg-white/50 rounded-xl border border-green-100">
+                              {[
+                                { id: 'document', label: 'Docs', icon: FileText },
+                                { id: 'presentation', label: 'Slides', icon: Eye },
+                                { id: 'spreadsheet', label: 'Sheets', icon: ListIcon }
+                              ].map((type) => (
+                                <button
+                                  key={type.id}
+                                  type="button"
+                                  onClick={() => setNewMaterialTemplateType(type.id as any)}
+                                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    newMaterialTemplateType === type.id 
+                                      ? 'bg-green-600 text-white shadow-sm' 
+                                      : 'text-green-700 hover:bg-green-100/50'
+                                  }`}
+                                >
+                                  {type.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">

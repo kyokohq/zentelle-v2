@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as fabric from 'fabric';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Square, 
   Circle, 
@@ -35,7 +36,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTool, setActiveTool] = useState<'select' | 'text' | 'rect' | 'circle' | 'draw' | 'hotspot'>('select');
+  const [activeTool, setActiveTool] = useState<'select' | 'text' | 'rect' | 'circle' | 'draw' | 'hotspot' | 'check' | 'line'>('select');
   const isAdmin = userRole === 'admin';
 
   useEffect(() => {
@@ -79,7 +80,6 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         fabric.Image.fromURL(material.url, {
           crossOrigin: 'anonymous'
         }).then((img) => {
-          // Proportionally scale image to fit canvas width
           const scale = 800 / img.width!;
           img.set({
             scaleX: scale,
@@ -91,33 +91,52 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           });
           canvas.add(img);
           
-          // canvas.setHeight(img.height! * scale); // Fabric 6 uses setDimensions
           canvas.setDimensions({ 
             width: canvas.width!, 
             height: (img.height || 0) * scale 
           });
 
-          // If student has saved markup, load it
+          // Priority: 1. Student's markup, 2. Teacher's template (from description)
           if (submission?.markupData) {
             canvas.loadFromJSON(submission.markupData).then(() => {
               canvas.renderAll();
             });
-          } else if (isAdmin && material.description?.startsWith('{')) {
-            // If admin has a template saved in description (placeholder logic)
+          } else if (material.description && material.description.trim().startsWith('{')) {
              try {
                 canvas.loadFromJSON(material.description).then(() => canvas.renderAll());
-             } catch(e) {}
+             } catch(e) {
+               console.warn("Valid JSON template not found in material description");
+             }
           }
         });
       }
 
       setFabricCanvas(canvas);
 
+      canvas.on('mouse:down', (options) => {
+        if (options.target && (options.target as any).isHotspot) {
+          const hotspot = options.target as any;
+          const data = hotspot.hotspotData;
+          if (isAdmin) {
+            const newContent = prompt("Edit Information Panel Content:", data.content);
+            if (newContent !== null) {
+              hotspot.hotspotData = { ...data, content: newContent };
+              // Maybe update the inner label if we had one
+            }
+          } else {
+            // Student sees info
+            setHotspotInfo(data.content);
+          }
+        }
+      });
+
       return () => {
         canvas.dispose();
       };
     }
   }, [loading, material]);
+
+  const [hotspotInfo, setHotspotInfo] = useState<string | null>(null);
 
   const handleToolChange = (tool: typeof activeTool) => {
     if (!fabricCanvas) return;
@@ -152,6 +171,48 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       });
       fabricCanvas.add(rect);
       fabricCanvas.setActiveObject(rect);
+      setActiveTool('select');
+    } else if (tool === 'hotspot') {
+      const hotspot = new fabric.Circle({
+        left: 200,
+        top: 200,
+        radius: 15,
+        fill: '#004275',
+        opacity: 0.6,
+        stroke: '#fff',
+        strokeWidth: 2,
+        hasControls: true,
+        hasBorders: true,
+      });
+      // Add custom property for metadata
+      (hotspot as any).isHotspot = true;
+      (hotspot as any).hotspotData = {
+        type: 'info',
+        content: 'Edit this hotspot info...'
+      };
+      fabricCanvas.add(hotspot);
+      fabricCanvas.setActiveObject(hotspot);
+      setActiveTool('select');
+    } else if (tool === 'check') {
+      const check = new fabric.IText('✓', {
+        left: 200,
+        top: 200,
+        fontFamily: 'Inter',
+        fontSize: 32,
+        fill: '#10b981',
+        fontWeight: 'bold'
+      });
+      fabricCanvas.add(check);
+      fabricCanvas.setActiveObject(check);
+      setActiveTool('select');
+    } else if (tool === 'line') {
+      const line = new fabric.Line([50, 50, 200, 50], {
+        stroke: '#004275',
+        strokeWidth: 3,
+        selectable: true
+      });
+      fabricCanvas.add(line);
+      fabricCanvas.setActiveObject(line);
       setActiveTool('select');
     }
   };
@@ -252,6 +313,24 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
             icon={<Square className="w-6 h-6" />} 
             label="Shape" 
           />
+          <ToolBtn 
+            active={activeTool === 'hotspot'} 
+            onClick={() => handleToolChange('hotspot')} 
+            icon={<Target className="w-6 h-6" />} 
+            label="Hotspot" 
+          />
+          <ToolBtn 
+            active={activeTool === 'check'} 
+            onClick={() => handleToolChange('check')} 
+            icon={<CheckCircle2 className="w-6 h-6" />} 
+            label="Checkmark" 
+          />
+          <ToolBtn 
+            active={activeTool === 'line'} 
+            onClick={() => handleToolChange('line')} 
+            icon={<ArrowLeft className="w-6 h-6 rotate-180" />} 
+            label="Connector" 
+          />
           
           <div className="mt-auto flex flex-col gap-4">
             <button 
@@ -282,6 +361,31 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           <div className="shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-lg overflow-hidden h-fit bg-white border border-gray-200">
             <canvas ref={canvasRef} />
           </div>
+
+          <AnimatePresence>
+            {hotspotInfo && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="fixed bottom-12 right-12 w-80 bg-white rounded-3xl shadow-2xl border border-gray-100 p-8 z-50 overflow-hidden"
+              >
+                 <div className="absolute top-0 left-0 w-full h-2 bg-[#004275]" />
+                 <button 
+                  onClick={() => setHotspotInfo(null)}
+                  className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded-full text-gray-400"
+                 >
+                   <X className="w-4 h-4" />
+                 </button>
+                 <h4 className="text-[10px] font-black uppercase tracking-widest text-[#004275] mb-4 flex items-center gap-2">
+                   <Target className="w-3 h-3" /> Area Information
+                 </h4>
+                 <div className="prose prose-sm text-gray-600 font-medium leading-relaxed">
+                   {hotspotInfo}
+                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
       </div>
     </div>
