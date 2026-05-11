@@ -580,6 +580,8 @@ function ZentelleApp() {
         <Route path="/attendance" element={<Attendance courses={courses} />} />
         <Route path="/groups" element={<Groups groups={groups} onCreateGroup={() => setShowCreateGroup(true)} />} />
         <Route path="/resources" element={<Resources resources={resources} onUploadResource={() => setShowUploadResource(true)} />} />
+        <Route path="/files" element={<div className="p-10"><h1 className="text-2xl font-black mb-4">My Files</h1><p className="text-gray-500">Your personal file storage is coming soon.</p></div>} />
+        <Route path="/clubs" element={<div className="p-10"><h1 className="text-2xl font-black mb-4">Clubs & Organizations</h1><p className="text-gray-500">Discover student clubs and organziations here soon.</p></div>} />
         {userProfile?.role === 'admin' && (
           <Route path="/admin" element={<Admin currentUserId={user.uid} currentSchoolId={userProfile?.schoolId} userEmail={user.email} />} />
         )}

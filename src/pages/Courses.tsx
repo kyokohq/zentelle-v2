@@ -63,7 +63,7 @@ export function Courses({ courses, userRole, onJoinCourse, onCreateCourse, onEdi
               userRole={userRole}
               onEdit={() => onEditCourse(course)}
               onDelete={() => onDeleteCourse(course.id)}
-              onNavigate={(tab) => navigate(`/courses/${course.id}`, { state: { activeTab: tab } })} 
+              onNavigate={(tab) => navigate(`/courses/${course.id}${tab ? `/${tab}` : ''}`)} 
             />
           ))}
         </AnimatePresence>

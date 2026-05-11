@@ -9,15 +9,25 @@ import {
   updateDoc,
   deleteDoc
 } from 'firebase/firestore';
-import { GoogleGenAI, Type } from "@google/genai";
 import { v4 as uuidv4 } from 'uuid';
 import { db, auth } from '../firebase';
-import { Staident, Material, Submission, UserProfile, QuizQuestion, QuizSubmission } from '../types';
+import { Staident, Material, Submission, UserProfile, QuizQuestion, QuizSubmission, Type } from '../types';
 
-// Initialize Gemini AI
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY || '' 
-});
+// Helper for AI proxy calls
+async function callAIProxy(prompt: string, config?: any, model?: string) {
+  const response = await fetch('/api/ai/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, config, model })
+  });
+  
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || 'AI Proxy Error');
+  }
+  
+  return await response.json();
+}
 
 const PERSONALITIES = [
   "Curious and eager to learn, but sometimes overthinks simple questions.",
@@ -117,10 +127,7 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }]
-      });
+      const response = await callAIProxy(prompt, null, "gemini-3-flash-preview");
       
       return response.text || "I tried my best but was a bit confused by the prompt.";
     } catch (error) {
@@ -155,29 +162,25 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                type: { type: Type.STRING },
-                text: { type: Type.STRING },
-                left: { type: Type.NUMBER },
-                top: { type: Type.NUMBER },
-                fontSize: { type: Type.NUMBER },
-                fontFamily: { type: Type.STRING },
-                fill: { type: Type.STRING }
-              },
-              required: ["type", "text", "left", "top"]
-            }
+      const response = await callAIProxy(prompt, {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              type: { type: Type.STRING },
+              text: { type: Type.STRING },
+              left: { type: Type.NUMBER },
+              top: { type: Type.NUMBER },
+              fontSize: { type: Type.NUMBER },
+              fontFamily: { type: Type.STRING },
+              fill: { type: Type.STRING }
+            },
+            required: ["type", "text", "left", "top"]
           }
         }
-      });
+      }, "gemini-3-flash-preview");
       
       const objects = JSON.parse(response.text || "[]");
       // Add version and background container expected by Fabric 6 JSON
@@ -216,17 +219,13 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            additionalProperties: { type: Type.STRING } 
-          }
+      const response = await callAIProxy(prompt, {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          additionalProperties: { type: Type.STRING } 
         }
-      });
+      }, "gemini-3-flash-preview");
       
       return JSON.parse(response.text || "{}");
     } catch (error) {
@@ -362,10 +361,7 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }]
-      });
+      const response = await callAIProxy(prompt, null, "gemini-3-flash-preview");
       
       return response.text || "I'm not sure how to respond to that.";
     } catch (error) {
