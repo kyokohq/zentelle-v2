@@ -182,11 +182,76 @@
         "status": { "type": "string", "enum": ["draft", "submitted"] },
         "grade": { "type": "number", "description": "Grade assigned to the submission" },
         "feedback": { "type": "string", "description": "Instructor feedback" },
+        "markupData": { "type": "string", "description": "Canvas markup data (JSON string)" },
         "studentName": { "type": "string", "description": "Name of the student" },
         "submittedAt": { "type": "string", "format": "date-time", "description": "When the assignment was submitted" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["materialId", "uid", "status", "timestamp"]
+    },
+    "Quiz": {
+      "title": "Quiz",
+      "description": "An assessment or quiz",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "courseId": { "type": "string" },
+        "timeLimit": { "type": "number", "description": "Time limit in minutes" },
+        "points": { "type": "number" },
+        "published": { "type": "boolean" },
+        "uid": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "courseId", "uid"]
+    },
+    "QuizQuestion": {
+      "title": "QuizQuestion",
+      "description": "A question within a quiz",
+      "type": "object",
+      "properties": {
+        "quizId": { "type": "string" },
+        "type": { "type": "string", "enum": ["multiple-choice", "checkbox", "matching", "image-hotspot", "short-answer"] },
+        "question": { "type": "string" },
+        "imageUrl": { "type": "string", "description": "Image for hotspot or reference" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctAnswer": { "type": "string" },
+        "correctAnswers": { "type": "array", "items": { "type": "string" } },
+        "matchingPairs": { "type": "object", "description": "Key-value pairs for matching questions" },
+        "hotspots": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "width": { "type": "number" },
+              "height": { "type": "number" },
+              "feedback": { "type": "string" },
+              "isCorrect": { "type": "boolean" },
+              "label": { "type": "string" }
+            }
+          }
+        },
+        "order": { "type": "number" }
+      },
+      "required": ["quizId", "type", "question"]
+    },
+    "QuizSubmission": {
+      "title": "QuizSubmission",
+      "description": "A student's quiz attempt",
+      "type": "object",
+      "properties": {
+        "quizId": { "type": "string" },
+        "uid": { "type": "string" },
+        "staidentId": { "type": "string" },
+        "isSimulated": { "type": "boolean" },
+        "answers": { "type": "object", "description": "Map of questionId to answer" },
+        "score": { "type": "number" },
+        "status": { "type": "string", "enum": ["in-progress", "submitted"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["quizId", "uid", "status"]
     },
     "Staident": {
       "title": "Staident",
@@ -294,6 +359,18 @@
     "/staident_messages/{messageId}": {
       "schema": "StaidentMessage",
       "description": "Direct messages with AI students"
+    },
+    "/quizzes/{quizId}": {
+      "schema": "Quiz",
+      "description": "Assessments and quizzes"
+    },
+    "/quiz_questions/{questionId}": {
+      "schema": "QuizQuestion",
+      "description": "Quiz questions"
+    },
+    "/quiz_submissions/{submissionId}": {
+      "schema": "QuizSubmission",
+      "description": "Quiz attempt records"
     }
   }
 }

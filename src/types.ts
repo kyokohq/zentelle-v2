@@ -123,7 +123,7 @@ export interface Material {
   id: string;
   courseId: string;
   parentId: string | null;
-  type: 'folder' | 'assignment' | 'file' | 'link';
+  type: 'folder' | 'assignment' | 'file' | 'link' | 'quiz' | 'worksheet';
   title: string;
   description?: string;
   color?: string;
@@ -135,15 +135,49 @@ export interface Material {
   dueDate?: any;
   uid: string;
   timestamp: any;
-  published: boolean; // Added for publishing/unpublishing
+  published: boolean; 
   order?: number;
+}
+
+export interface QuizQuestion {
+  id: string;
+  quizId: string;
+  type: 'multiple-choice' | 'checkbox' | 'matching' | 'image-hotspot' | 'short-answer';
+  question: string;
+  imageUrl?: string;
+  options?: string[];
+  correctAnswer?: string;
+  correctAnswers?: string[];
+  matchingPairs?: Record<string, string>;
+  hotspots?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    feedback?: string;
+    isCorrect: boolean;
+    label?: string;
+  }[];
+  order: number;
+}
+
+export interface QuizSubmission {
+  id: string;
+  quizId: string;
+  uid: string;
+  staidentId?: string;
+  isSimulated?: boolean;
+  answers: Record<string, any>;
+  score?: number;
+  status: 'in-progress' | 'submitted';
+  timestamp: any;
 }
 
 export interface Submission {
   id: string;
   materialId: string;
   uid: string;
-  staidentId?: string; // ID if submitted by a Staident
+  staidentId?: string; 
   isSimulated?: boolean;
   simulationExplanation?: string;
   googleDriveFileId?: string;
@@ -152,6 +186,7 @@ export interface Submission {
   status: 'draft' | 'submitted';
   grade?: number;
   feedback?: string;
+  markupData?: string; // Added for canvas markup
   studentName?: string;
   submittedAt?: any;
   timestamp: any;

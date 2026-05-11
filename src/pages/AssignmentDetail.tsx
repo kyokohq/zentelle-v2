@@ -21,7 +21,9 @@ import {
   User,
   CheckCircle,
   Upload,
-  Type as TypeIcon
+  Type as TypeIcon,
+  Palette,
+  Trophy
 } from 'lucide-react';
 import { 
   collection, 
@@ -34,12 +36,16 @@ import {
   doc, 
   getDoc,
   serverTimestamp,
-  setDoc
+  setDoc,
+  getDocs
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Material, Submission } from '../types';
+import { QuizPlayer } from '../components/QuizPlayer';
+import { InteractiveWorksheet } from '../components/InteractiveWorksheet';
+import { QuizCreator } from '../components/QuizCreator';
 
 export default function AssignmentDetail({ userRole }: { userRole?: string }) {
   const { courseId, assignmentId } = useParams();
@@ -53,6 +59,9 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
   const [isGoogleAuth, setIsGoogleAuth] = useState(false);
   const [textSubmission, setTextSubmission] = useState('');
   const [isTextMode, setIsTextMode] = useState(false);
+  const [isMarkupMode, setIsMarkupMode] = useState(false);
+  const [showQuizPlayer, setShowQuizPlayer] = useState(false);
+  const [showQuizCreator, setShowQuizCreator] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -285,6 +294,18 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
     );
   }
 
+  if (showQuizPlayer && assignmentId) {
+    return <QuizPlayer quizId={assignmentId} onClose={() => setShowQuizPlayer(false)} />;
+  }
+
+  if (showQuizCreator && assignmentId && courseId) {
+    return <QuizCreator courseId={courseId} quizId={assignmentId} onClose={() => setShowQuizCreator(false)} onSaved={() => {}} />;
+  }
+
+  if (isMarkupMode && assignmentId && courseId) {
+    return <InteractiveWorksheet materialId={assignmentId} courseId={courseId} userRole={userRole} onClose={() => setIsMarkupMode(false)} />;
+  }
+
   if (error || !assignment) {
     return (
       <div className="bg-red-50 p-8 rounded-3xl text-center">
@@ -307,7 +328,11 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
             <ArrowLeft className="w-6 h-6 text-gray-600" />
           </button>
           <div>
-            <h1 className="text-3xl font-black text-[#004275] font-headline">{assignment.title}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-black text-[#004275] font-headline">{assignment.title}</h1>
+              {assignment.type === 'quiz' && <Trophy className="w-6 h-6 text-purple-500" />}
+              {assignment.type === 'worksheet' && <Palette className="w-6 h-6 text-pink-500" />}
+            </div>
             <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
               <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> Posted {assignment.timestamp?.toDate ? new Date(assignment.timestamp.toDate()).toLocaleDateString() : 'Recently'}</span>
               {assignment.dueDate && (
@@ -331,12 +356,74 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Description</h2>
-            <p className="text-gray-600 whitespace-pre-wrap leading-relaxed">
-              {assignment.description || 'No description provided for this assignment.'}
-            </p>
-          </div>
+          {/* Assignment Specific UI */}
+          {assignment.type === 'quiz' ? (
+            <div className="bg-white rounded-[40px] p-12 shadow-xl border border-gray-100 text-center space-y-8 overflow-hidden relative">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-purple-500 to-blue-500" />
+              <div className="w-24 h-24 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trophy className="w-12 h-12 text-purple-500" />
+              </div>
+              <div>
+                <h3 className="text-3xl font-black text-[#004275] mb-2 font-headline">Knowledge Check</h3>
+                <p className="text-gray-500 max-w-sm mx-auto">This is an automated assessment to test your understanding of the current topics.</p>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                {isAdmin ? (
+                  <button 
+                    onClick={() => setShowQuizCreator(true)}
+                    className="w-full bg-[#004275] text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-[#005a9c] transition-all shadow-lg active:scale-95"
+                  >
+                    Manage Quiz Questions
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setShowQuizPlayer(true)}
+                    className="w-full bg-[#004275] text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-[#005a9c] transition-all shadow-lg active:scale-95"
+                  >
+                    Start Assessment
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : assignment.type === 'worksheet' ? (
+            <div className="bg-white rounded-[40px] p-12 shadow-xl border border-gray-100 text-center space-y-8 overflow-hidden relative">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-500 to-orange-500" />
+              <div className="w-24 h-24 bg-pink-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Palette className="w-12 h-12 text-pink-500" />
+              </div>
+              <div>
+                <h3 className="text-3xl font-black text-[#004275] mb-2 font-headline">Interactive Worksheet</h3>
+                <p className="text-gray-500 max-w-sm mx-auto">Use our interactive tools to draw, type, and complete this worksheet digitally.</p>
+              </div>
+
+              <button 
+                onClick={() => setIsMarkupMode(true)}
+                className="w-full bg-[#004275] text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-[#005a9c] transition-all shadow-lg active:scale-95"
+              >
+                {isAdmin ? 'Edit Master Template' : 'Open Worksheet Viewer'}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Description</h2>
+                <div className="flex justify-between items-start">
+                  <p className="text-gray-600 whitespace-pre-wrap leading-relaxed flex-1">
+                    {assignment.description || 'No description provided for this assignment.'}
+                  </p>
+                  {assignment.url && !isAdmin && (
+                    <button 
+                      onClick={() => setIsMarkupMode(true)}
+                      className="ml-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[#004275] hover:underline bg-blue-50 px-4 py-2 rounded-xl"
+                    >
+                      <Palette className="w-4 h-4" /> Markup File
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Grading Feedback for Students */}
           {!isAdmin && submission?.grade !== undefined && (

@@ -34,7 +34,8 @@ import {
   Unlock,
   Cloud,
   Copy,
-  GripVertical
+  GripVertical,
+  Trophy
 } from 'lucide-react';
 import { 
   collection, 
@@ -286,7 +287,11 @@ export default function Materials({
   const [currentFolder, setCurrentFolder] = useState<Material | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newMaterialType, setNewMaterialType] = useState<'folder' | 'assignment' | 'file' | 'link'>('folder');
+  const [newMaterialType, setNewMaterialType] = useState<'folder' | 'assignment' | 'file' | 'link' | 'quiz' | 'worksheet'>('folder');
+  const [showQuizCreator, setShowQuizCreator] = useState(false);
+  const [showQuizPlayer, setShowQuizPlayer] = useState(false);
+  const [showInteractiveWorksheet, setShowInteractiveWorksheet] = useState(false);
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
   const [newMaterialTitle, setNewMaterialTitle] = useState('');
   const [newMaterialDescription, setNewMaterialDescription] = useState('');
   const [newMaterialColor, setNewMaterialColor] = useState(COLORS[0]);
@@ -478,9 +483,9 @@ export default function Materials({
       materialData.color = newMaterialColor;
     } else if (newMaterialType === 'link') {
       materialData.url = newMaterialLink;
-    } else if (newMaterialType === 'file') {
-      materialData.url = newMaterialFile || newMaterialLink;
-    } else if (newMaterialType === 'assignment') {
+    } else if (newMaterialType === 'file' || newMaterialType === 'worksheet') {
+      materialData.url = newMaterialFile || newMaterialLink || 'https://picsum.photos/seed/worksheet/800/1000';
+    } else if (newMaterialType === 'assignment' || newMaterialType === 'quiz') {
       materialData.googleDriveTemplateId = newMaterialTemplateId || null;
       materialData.googleDriveTemplateType = newMaterialTemplateId ? newMaterialTemplateType : null;
       materialData.points = newMaterialPoints;
@@ -617,6 +622,8 @@ export default function Materials({
     switch (type) {
       case 'folder': return <Folder className="w-10 h-10" style={{ color: color || '#004275' }} />;
       case 'assignment': return <FileText className="w-10 h-10 text-orange-500" />;
+      case 'quiz': return <Trophy className="w-10 h-10 text-purple-500" />;
+      case 'worksheet': return <Palette className="w-10 h-10 text-pink-500" />;
       case 'file': return <FileIcon className="w-10 h-10 text-blue-500" />;
       case 'link': return <LinkIcon className="w-10 h-10 text-green-500" />;
       default: return <FileIcon className="w-10 h-10 text-gray-500" />;
@@ -824,10 +831,12 @@ export default function Materials({
             </div>
 
             <form onSubmit={handleAddMaterial} className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {[
                   { id: 'folder', label: 'Folder', icon: FolderPlus, color: 'text-blue-600' },
                   { id: 'assignment', label: 'Assignment', icon: FilePlus, color: 'text-orange-600' },
+                  { id: 'quiz', label: 'Quiz', icon: Trophy, color: 'text-purple-600' },
+                  { id: 'worksheet', label: 'Worksheet', icon: Palette, color: 'text-pink-600' },
                   { id: 'file', label: 'File', icon: FileIcon, color: 'text-blue-500' },
                   { id: 'link', label: 'Link', icon: LinkIcon, color: 'text-green-600' }
                 ].map((type) => (
@@ -905,7 +914,7 @@ export default function Materials({
                   </div>
                 )}
 
-                {newMaterialType === 'file' && (
+                {(newMaterialType === 'file' || newMaterialType === 'worksheet') && (
                   <div className="space-y-4">
                     <div className="p-8 border-2 border-dashed border-gray-200 rounded-[32px] bg-gray-50/50 hover:border-[#004275]/20 hover:bg-[#004275]/5 transition-all text-center group cursor-pointer relative">
                       <input 
@@ -920,41 +929,22 @@ export default function Materials({
                             {isUploading ? (
                               <Loader2 className="w-8 h-8 text-[#004275] animate-spin" />
                             ) : (
-                              <Plus className="w-8 h-8 text-[#004275]" />
+                              <Plus className="w-8 h-8 text-[#004275] border-none" />
                             )}
                           </div>
                           <div>
                             <p className="text-lg font-black text-gray-900 font-headline">
-                              {newMaterialFile ? 'File Selected' : 'Upload File'}
+                              {newMaterialFile ? 'File Selected' : 'Upload Worksheet Image'}
                             </p>
                             <p className="text-sm text-gray-500 font-medium">Click to select or drag and drop</p>
                           </div>
-                          {newMaterialFile && (
-                            <div className="mt-2 px-3 py-1 bg-[#004275] text-white text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center gap-2">
-                              <CheckCircle2 className="w-3 h-3" />
-                              Ready to update
-                            </div>
-                          )}
                         </div>
                       </label>
                     </div>
-
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-                      <div className="relative flex justify-center text-[10px] uppercase font-black text-gray-300 tracking-widest"><span className="bg-white px-2 italic">OR ENTER LINK</span></div>
-                    </div>
-
-                    <input 
-                      type="url" 
-                      value={newMaterialLink}
-                      onChange={(e) => setNewMaterialLink(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
-                      placeholder="Paste file URL here..."
-                    />
                   </div>
                 )}
 
-                {newMaterialType === 'assignment' && (
+                {(newMaterialType === 'assignment' || newMaterialType === 'quiz') && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
