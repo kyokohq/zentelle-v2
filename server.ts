@@ -138,6 +138,35 @@ async function startServer() {
     }
   });
 
+  // Gemini AI Proxy Route
+  app.post("/api/ai/generate", async (req, res) => {
+    const { prompt } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY is missing from environment variables");
+      return res.status(500).json({ error: "Gemini API key not configured on server" });
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash", // Use a stable model
+        contents: prompt
+      });
+      res.json({ text: response.text });
+    } catch (error: any) {
+      console.error("Gemini Proxy Error:", error);
+      res.status(500).json({ 
+        error: error.message || "Failed to generate content",
+        details: error.toString()
+      });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

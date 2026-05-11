@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import { 
   collection, 
   addDoc, 
@@ -28,8 +27,6 @@ const NAMES = [
   "Maya Patel", "Sam Wilson", "Elena Rodriguez", "Chris Taylor",
   "Aisha Khan", "Noah Garcia", "Zoe Brown", "Liam O'Connor"
 ];
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export const StaidentService = {
   async addStaidentsToCourse(courseId: string, count: number, schoolId?: string) {
@@ -113,16 +110,20 @@ export const StaidentService = {
     `;
 
     try {
-      if (!process.env.GEMINI_API_KEY) {
-        throw new Error("GEMINI_API_KEY not found");
-      }
-
-      const response = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
+      const response = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
       });
       
-      return response.text || "I tried my best but was a bit confused by the prompt.";
+      if (!response.ok) {
+        throw new Error('Failed to generate content');
+      }
+      
+      const data = await response.json();
+      return data.text || "I tried my best but was a bit confused by the prompt.";
     } catch (error) {
       console.error("Gemini Error:", error);
       return "Student failed to generate content due to an internal error.";
@@ -220,16 +221,18 @@ export const StaidentService = {
     `;
 
     try {
-      if (!process.env.GEMINI_API_KEY) {
-        throw new Error("GEMINI_API_KEY not found");
-      }
-
-      const response = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
+      const response = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
       });
       
-      return response.text || "I'm not sure how to respond to that.";
+      if (!response.ok) throw new Error('Failed to generate response');
+      
+      const data = await response.json();
+      return data.text || "I'm not sure how to respond to that.";
     } catch (error) {
       console.error("Gemini Error:", error);
       return "The student is unable to respond right now.";
