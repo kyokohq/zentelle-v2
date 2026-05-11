@@ -30,12 +30,17 @@ export function EnrollmentManager({ courseId, schoolId }: { courseId: string, sc
   const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
-    if (!courseId) return;
+    if (!courseId || typeof courseId !== 'string') {
+      setLoading(false);
+      return;
+    }
 
     // Listen for enrollments
     const qEnrollments = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
     const unsubEnrollments = onSnapshot(qEnrollments, async (snapshot) => {
-      const studentIds = snapshot.docs.map(doc => doc.data().uid || doc.data().studentId || doc.id.split('_')[0]);
+      const studentIds = snapshot.docs
+        .map(doc => doc.data().uid || doc.data().studentId || doc.id.split('_')[0])
+        .filter(id => id && typeof id === 'string');
       
       if (studentIds.length > 0) {
         setLoading(true);

@@ -50,15 +50,21 @@ export function StaidentDashboard({ courseId, staidents }: StaidentDashboardProp
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
+    if (!courseId) return;
+
     // Fetch assignments
     const fetchAssignments = async () => {
-      const q = query(
-        collection(db, 'materials'), 
-        where('courseId', '==', courseId),
-        where('type', '==', 'assignment')
-      );
-      const snap = await getDocs(q);
-      setAssignments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Material)));
+      try {
+        const q = query(
+          collection(db, 'materials'), 
+          where('courseId', '==', courseId),
+          where('type', '==', 'assignment')
+        );
+        const snap = await getDocs(q);
+        setAssignments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Material)));
+      } catch (error) {
+        console.error("Error fetching assignments:", error);
+      }
     };
     fetchAssignments();
 
@@ -75,7 +81,7 @@ export function StaidentDashboard({ courseId, staidents }: StaidentDashboardProp
   }, [courseId]);
 
   useEffect(() => {
-    if (!selectedStaident) {
+    if (!selectedStaident?.id || !courseId) {
       setMessages([]);
       return;
     }

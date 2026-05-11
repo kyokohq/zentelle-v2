@@ -24,36 +24,15 @@ export function Grades({ courses }: GradesProps) {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* GPA Summary */}
-        <div className="lg:col-span-1 space-y-8">
-          <div className="bg-[#004275] p-8 rounded-3xl text-white shadow-xl shadow-blue-900/20">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-white/10 rounded-lg">
-                <Star className="w-6 h-6 fill-white" />
-              </div>
-              <h3 className="font-black text-lg tracking-tight font-headline">GPA Summary</h3>
-            </div>
-            <div className="flex items-end gap-3 mb-8">
-              <span className="text-6xl font-black leading-none">3.82</span>
-              <span className="text-blue-100/60 font-bold mb-1">/ 4.0</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm font-bold text-green-300">
-              <TrendingUp className="w-4 h-4" />
-              <span>+0.12 from last semester</span>
-            </div>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 gap-10">
         {/* Grades Table */}
-        <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50/50 border-b border-gray-100">
                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Course Name</th>
                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Instructor</th>
                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 text-center">Grade</th>
-                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 text-right">Trend</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -69,13 +48,15 @@ export function Grades({ courses }: GradesProps) {
                   <td className="px-8 py-6 text-center">
                     <span className="text-sm font-black text-[#004275] bg-[#004275]/5 px-3 py-1.5 rounded-lg">{course.grade}</span>
                   </td>
-                  <td className="px-8 py-6 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {Math.random() > 0.5 ? <TrendingUp className="w-4 h-4 text-green-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
-                    </div>
-                  </td>
                 </tr>
               ))}
+              {courses.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-8 py-12 text-center text-gray-400 font-medium italic">
+                    No grades recorded yet. Enroll in courses to see your grades here.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

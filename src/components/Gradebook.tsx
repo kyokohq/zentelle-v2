@@ -58,14 +58,34 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
   const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(null);
 
   useEffect(() => {
-    if (!courseId) return;
+    if (!courseId) {
+      setLoading(false);
+      return;
+    }
 
     // Fetch enrollments to get students
     const qEnrollments = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
     const unsubEnrollments = onSnapshot(qEnrollments, async (snapshot) => {
-      const studentIds = snapshot.docs.map(doc => doc.data().uid);
+      const studentIds = snapshot.docs
+        .map(doc => doc.data().uid)
+        .filter(id => id && typeof id === 'string');
+      
       if (studentIds.length === 0) {
         setStudents([]);
+        
+        // Even if no students, we still want to fetch Staidents
+        const staidentsSnap = await getDocs(query(collection(db, 'staidents'), where('courseId', '==', courseId)));
+        const staidentProfiles = staidentsSnap.docs.map(doc => {
+          const data = doc.data();
+          return {
+            uid: `staident_${doc.id}`,
+            displayName: data.name,
+            email: 'AI Practice Student',
+            role: 'student',
+            photoURL: null
+          } as any;
+        });
+        setStudents(staidentProfiles);
         setLoading(false);
         return;
       }

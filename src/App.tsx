@@ -178,10 +178,15 @@ function ZentelleApp() {
     };
     syncProfile();
 
+    if (!uid) return;
+    
     // Listeners
     const qEnrollments = query(collection(db, 'enrollments'), where('uid', '==', uid));
     const unsubEnrollments = onSnapshot(qEnrollments, async (snapshot) => {
-      const enrolledCourseIds = snapshot.docs.map(doc => doc.data().courseId);
+      const enrolledCourseIds = snapshot.docs
+        .map(doc => doc.data().courseId)
+        .filter(id => id && typeof id === 'string');
+      
       if (enrolledCourseIds.length === 0) {
         setCourses([]);
         return;
@@ -202,22 +207,30 @@ function ZentelleApp() {
       setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Activity)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'activities'));
 
-    const qReminders = query(collection(db, 'reminders'), where('uid', '==', uid));
+    if (!user?.uid) return;
+
+    const qReminders = query(collection(db, 'reminders'), where('uid', '==', user.uid));
     const unsubReminders = onSnapshot(qReminders, (snapshot) => {
       setReminders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reminder)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'reminders'));
 
-    const qEvents = query(collection(db, 'events'), where('uid', '==', uid));
+    if (!user?.uid) return;
+
+    const qEvents = query(collection(db, 'events'), where('uid', '==', user.uid));
     const unsubEvents = onSnapshot(qEvents, (snapshot) => {
       setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'events'));
 
-    const qTasks = query(collection(db, 'tasks'), where('uid', '==', uid));
+    if (!user?.uid) return;
+
+    const qTasks = query(collection(db, 'tasks'), where('uid', '==', user.uid));
     const unsubTasks = onSnapshot(qTasks, (snapshot) => {
       setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'tasks'));
 
-    const qGroups = query(collection(db, 'groups'), where('uid', '==', uid));
+    if (!user?.uid) return;
+
+    const qGroups = query(collection(db, 'groups'), where('uid', '==', user.uid));
     const unsubGroups = onSnapshot(qGroups, (snapshot) => {
       setGroups(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Group)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'groups'));
