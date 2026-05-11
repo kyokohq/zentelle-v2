@@ -119,6 +119,13 @@ export interface CourseMessage {
   timestamp: string;
 }
 
+export interface HotspotData {
+  type: 'correct' | 'incorrect' | 'info' | 'text-response';
+  content: string;
+  points?: number;
+  id?: string;
+}
+
 export interface Material {
   id: string;
   courseId: string;

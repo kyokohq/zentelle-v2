@@ -16,11 +16,13 @@ import {
   Download,
   CheckCircle2,
   Loader2,
-  Trash2
+  Trash2,
+  AlertCircle,
+  Info
 } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Material, Submission } from '../types';
+import { Material, Submission, HotspotData } from '../types';
 
 interface InteractiveWorksheetProps {
   materialId: string;
@@ -37,6 +39,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTool, setActiveTool] = useState<'select' | 'text' | 'rect' | 'circle' | 'draw' | 'hotspot' | 'check' | 'line'>('select');
+  const [selectedHotspot, setSelectedHotspot] = useState<fabric.Object | null>(null);
   const isAdmin = userRole === 'admin';
 
   useEffect(() => {
@@ -113,19 +116,43 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
 
       setFabricCanvas(canvas);
 
+      canvas.on('selection:created', (e) => {
+        const obj = e.selected?.[0];
+        if (obj && (obj as any).isHotspot) {
+          setSelectedHotspot(obj);
+        } else {
+          setSelectedHotspot(null);
+        }
+      });
+
+      canvas.on('selection:cleared', () => setSelectedHotspot(null));
+
       canvas.on('mouse:down', (options) => {
         if (options.target && (options.target as any).isHotspot) {
           const hotspot = options.target as any;
-          const data = hotspot.hotspotData;
+          const data = hotspot.hotspotData as HotspotData;
           if (isAdmin) {
-            const newContent = prompt("Edit Information Panel Content:", data.content);
-            if (newContent !== null) {
-              hotspot.hotspotData = { ...data, content: newContent };
-              // Maybe update the inner label if we had one
-            }
+            setSelectedHotspot(hotspot);
           } else {
-            // Student sees info
-            setHotspotInfo(data.content);
+            // Student interaction logic
+            if (data.type === 'info') {
+              setHotspotInfo(data.content);
+            } else if (data.type === 'correct' || data.type === 'incorrect') {
+              // Visual feedback for students
+              hotspot.set('fill', data.type === 'correct' ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)');
+              canvas.renderAll();
+              
+              // We could play a sound or show an animation here
+            } else if (data.type === 'text-response') {
+              const response = prompt("Enter your answer:", data.content || "");
+              if (response !== null) {
+                hotspot.hotspotData = { ...data, content: response };
+                // Visual indicator that it's answered
+                hotspot.set('stroke', '#004275');
+                hotspot.set('strokeWidth', 3);
+                canvas.renderAll();
+              }
+            }
           }
         }
       });
@@ -173,25 +200,30 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       fabricCanvas.setActiveObject(rect);
       setActiveTool('select');
     } else if (tool === 'hotspot') {
-      const hotspot = new fabric.Circle({
+      const hotspot = new fabric.Rect({
         left: 200,
         top: 200,
-        radius: 15,
-        fill: '#004275',
-        opacity: 0.6,
-        stroke: '#fff',
+        width: 40,
+        height: 40,
+        fill: 'rgba(0, 66, 117, 0.2)',
+        stroke: '#004275',
         strokeWidth: 2,
-        hasControls: true,
-        hasBorders: true,
+        rx: 8,
+        ry: 8,
+        transparentCorners: false,
+        cornerColor: '#004275',
+        cornerSize: 10,
       });
       // Add custom property for metadata
       (hotspot as any).isHotspot = true;
       (hotspot as any).hotspotData = {
         type: 'info',
-        content: 'Edit this hotspot info...'
+        content: 'New Information Point',
+        id: Math.random().toString(36).substr(2, 9)
       };
       fabricCanvas.add(hotspot);
       fabricCanvas.setActiveObject(hotspot);
+      setSelectedHotspot(hotspot);
       setActiveTool('select');
     } else if (tool === 'check') {
       const check = new fabric.IText('✓', {
@@ -221,7 +253,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     if (!fabricCanvas || !auth.currentUser) return;
     setSaving(true);
     try {
-      const canvasJson = JSON.stringify(fabricCanvas.toJSON());
+      const canvasJson = JSON.stringify(fabricCanvas.toObject(['isHotspot', 'hotspotData']));
       
       if (isAdmin) {
         // Teacher saves the template
@@ -250,6 +282,21 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateHotspotType = (type: HotspotData['type']) => {
+    if (!selectedHotspot) return;
+    const data = (selectedHotspot as any).hotspotData as HotspotData;
+    (selectedHotspot as any).hotspotData = { ...data, type };
+    
+    // Update visual style based on type for teacher view
+    let color = 'rgba(0, 66, 117, 0.2)';
+    if (type === 'correct') color = 'rgba(34, 197, 94, 0.2)';
+    if (type === 'incorrect') color = 'rgba(239, 68, 68, 0.2)';
+    if (type === 'text-response') color = 'rgba(249, 115, 22, 0.2)';
+    
+    selectedHotspot.set('fill', color);
+    fabricCanvas?.renderAll();
   };
 
   if (loading) return (
@@ -357,7 +404,79 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         </aside>
 
         {/* Canvas Area */}
-        <main className="flex-1 overflow-auto p-12 flex justify-center bg-gray-100/50">
+        <main className="flex-1 overflow-auto p-12 flex flex-col items-center bg-gray-100/50">
+          {isAdmin && selectedHotspot && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full max-w-4xl mb-8 bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl flex items-center justify-between"
+            >
+              <div className="flex items-center gap-6 flex-1">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-[#004275] mb-2">Hotspot Type</h3>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => updateHotspotType('correct')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        (selectedHotspot as any).hotspotData.type === 'correct' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3 h-3" /> Correct
+                    </button>
+                    <button 
+                      onClick={() => updateHotspotType('incorrect')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        (selectedHotspot as any).hotspotData.type === 'incorrect' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <AlertCircle className="w-3 h-3" /> Incorrect
+                    </button>
+                    <button 
+                      onClick={() => updateHotspotType('info')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        (selectedHotspot as any).hotspotData.type === 'info' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <Info className="w-3 h-3" /> Information
+                    </button>
+                    <button 
+                      onClick={() => updateHotspotType('text-response')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        (selectedHotspot as any).hotspotData.type === 'text-response' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <Type className="w-3 h-3" /> Response
+                    </button>
+                  </div>
+                </div>
+                <div className="h-10 w-[1px] bg-gray-100" />
+                <div className="flex-1">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Content / Instructions</h3>
+                  <input 
+                    type="text" 
+                    value={(selectedHotspot as any).hotspotData.content}
+                    onChange={(e) => {
+                      const data = (selectedHotspot as any).hotspotData;
+                      (selectedHotspot as any).hotspotData = { ...data, content: e.target.value };
+                      fabricCanvas?.renderAll();
+                    }}
+                    placeholder="Enter hotspot text or instructions..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#004275]"
+                  />
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  fabricCanvas?.remove(selectedHotspot);
+                  setSelectedHotspot(null);
+                }}
+                className="ml-4 p-3 text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </motion.div>
+          )}
+
           <div className="shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-lg overflow-hidden h-fit bg-white border border-gray-200">
             <canvas ref={canvasRef} />
           </div>
