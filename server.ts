@@ -149,34 +149,23 @@ async function startServer() {
     }
 
     try {
-      const genAI = new GoogleGenAI(apiKey);
-      const modelId = model || "gemini-1.5-flash";
-      const generativeModel = genAI.getGenerativeModel({ model: modelId, ...config });
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: model || "gemini-3-flash-preview",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: config
+      });
       
-      const result = await generativeModel.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      console.log(`Successfully generated AI response using model: ${modelId}`);
-      res.json({ text });
+      res.json({ text: response.text });
     } catch (error: any) {
       console.error("Gemini Server Error:", error);
       res.status(500).json({ error: error.message || "Failed to generate content from AI" });
     }
   });
 
-  // Catch-all for API 404s
-  app.all("/api/*", (req, res) => {
-    res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
-  });
-
   // Health check route
   app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
-      time: new Date().toISOString(),
-      environment: process.env.NODE_ENV || "development" 
-    });
+    res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
   });
 
   // Vite middleware for development
