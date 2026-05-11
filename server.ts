@@ -140,9 +140,11 @@ async function startServer() {
 
   // Gemini AI Proxy Route
   app.post("/api/ai/generate", async (req, res) => {
+    console.log("POST request received for /api/ai/generate");
     const { prompt } = req.body;
     
     if (!prompt) {
+      console.warn("Missing prompt in request body");
       return res.status(400).json({ error: "Prompt is required" });
     }
 
@@ -152,19 +154,17 @@ async function startServer() {
     }
 
     try {
-      // In @google/genai 0.x, the constructor often takes the key directly
-      // or as { apiKey: ... }. We'll try the most flexible way.
-      let genAI;
-      try {
-        genAI = new GoogleGenAI(process.env.GEMINI_API_KEY!);
-      } catch (e) {
-        genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      }
+      console.log("Initializing Gemini AI with provided key...");
+      const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      res.json({ text: response.text() });
+      const response = await genAI.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      });
+      
+      const text = response.text;
+      console.log("Successfully generated AI response");
+      res.json({ text });
     } catch (error: any) {
       console.error("Gemini Proxy Error:", error);
       res.status(500).json({ 
@@ -172,6 +172,11 @@ async function startServer() {
         details: error.toString()
       });
     }
+  });
+
+  // Health check route
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
   });
 
   // Vite middleware for development
