@@ -54,7 +54,7 @@ import { Admin } from './pages/Admin';
 import { Onboarding } from './pages/Onboarding';
 import Materials from './pages/Materials';
 import AssignmentDetail from './pages/AssignmentDetail';
-import { Loader2, LogIn, X } from 'lucide-react';
+import { Loader2, LogIn, X, Plus } from 'lucide-react';
 
 // --- Error Handling ---
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
@@ -112,6 +112,7 @@ function ZentelleApp() {
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showUploadResource, setShowUploadResource] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
 
   // Auth Listener
   useEffect(() => {
@@ -376,6 +377,33 @@ function ZentelleApp() {
     }
   };
 
+  const handleUpdateCourse = async (courseId: string, courseData: any) => {
+    try {
+      await setDoc(doc(db, 'courses', courseId), courseData, { merge: true });
+      setEditingCourse(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `courses/${courseId}`);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!confirm("Are you sure you want to delete this course? This will remove all enrollments and content.")) return;
+    try {
+      // 1. Delete course doc
+      await deleteDoc(doc(db, 'courses', courseId));
+      
+      // 2. Delete enrollments (optional but good practice)
+      const q = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
+      const snap = await getDocs(q);
+      const deletions = snap.docs.map(d => deleteDoc(doc(db, 'enrollments', d.id)));
+      await Promise.all(deletions);
+      
+      alert("Course deleted successfully.");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `courses/${courseId}`);
+    }
+  };
+
   const handleAddTask = async (taskData: any) => {
     if (!user) return;
     try {
@@ -513,12 +541,23 @@ function ZentelleApp() {
             loading={loading}
             onJoinCourse={() => setShowAddCourse(true)}
             onCreateCourse={() => setShowCreateCourse(true)}
+            onEditCourse={(course) => setEditingCourse(course)}
+            onDeleteCourse={handleDeleteCourse}
             onDeleteReminder={deleteReminder}
             onDeleteTask={deleteTask}
             onToggleTask={toggleTaskStatus}
           />
         } />
-        <Route path="/courses" element={<Courses courses={courses} userRole={userProfile?.role} onJoinCourse={() => setShowAddCourse(true)} onCreateCourse={() => setShowCreateCourse(true)} />} />
+        <Route path="/courses" element={
+          <Courses 
+            courses={courses} 
+            userRole={userProfile?.role} 
+            onJoinCourse={() => setShowAddCourse(true)} 
+            onCreateCourse={() => setShowCreateCourse(true)} 
+            onEditCourse={(course) => setEditingCourse(course)}
+            onDeleteCourse={handleDeleteCourse}
+          />
+        } />
         <Route path="/courses/:courseId" element={<CourseDetail userRole={userProfile?.role} />} />
         <Route path="/courses/:courseId/:tab" element={<CourseDetail userRole={userProfile?.role} />} />
         <Route path="/courses/:courseId/:tab/:folderId" element={<CourseDetail userRole={userProfile?.role} />} />
@@ -570,6 +609,13 @@ function ZentelleApp() {
         <UploadResourceModal 
           onClose={() => setShowUploadResource(false)} 
           onSubmit={handleUploadResource} 
+        />
+      )}
+      {editingCourse && (
+        <CreateCourseModal 
+          course={editingCourse}
+          onClose={() => setEditingCourse(null)} 
+          onSubmit={(data) => handleUpdateCourse(editingCourse.id, data)} 
         />
       )}
     </Layout>
@@ -634,13 +680,14 @@ function AddTaskModal({ courses, onClose, onSubmit }: { courses: Course[], onClo
   );
 }
 
-function CreateCourseModal({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => void }) {
-  const [title, setTitle] = useState('');
-  const [instructor, setInstructor] = useState('');
-  const [section, setSection] = useState('');
-  const [tag, setTag] = useState('');
-  const [code, setCode] = useState('');
-  const [image, setImage] = useState('https://picsum.photos/seed/course/800/600');
+function CreateCourseModal({ course, onClose, onSubmit }: { course?: Course, onClose: () => void, onSubmit: (data: any) => void }) {
+  const [title, setTitle] = useState(course?.title || '');
+  const [instructor, setInstructor] = useState(course?.instructor || '');
+  const [section, setSection] = useState(course?.section || '');
+  const [tag, setTag] = useState(course?.tag || '');
+  const [code, setCode] = useState(course?.code || '');
+  const [image, setImage] = useState(course?.image || 'https://picsum.photos/seed/course/800/600');
+  const [color, setColor] = useState(course?.color || 'bg-[#004275]');
 
   const colors = ['bg-[#004275]', 'bg-[#4d627e]', 'bg-[#1a1c1c]', 'bg-[#005a9c]'];
 
@@ -648,7 +695,7 @@ function CreateCourseModal({ onClose, onSubmit }: { onClose: () => void, onSubmi
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl w-full max-w-lg p-8 shadow-2xl my-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-black text-[#004275] font-headline">Create New Course</h2>
+          <h2 className="text-2xl font-black text-[#004275] font-headline">{course ? 'Edit Course' : 'Create New Course'}</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6" /></button>
         </div>
         <form onSubmit={(e) => { 
@@ -660,7 +707,7 @@ function CreateCourseModal({ onClose, onSubmit }: { onClose: () => void, onSubmi
             tag, 
             code, 
             image,
-            color: colors[Math.floor(Math.random() * colors.length)]
+            color: color || colors[Math.floor(Math.random() * colors.length)]
           }); 
         }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -693,7 +740,7 @@ function CreateCourseModal({ onClose, onSubmit }: { onClose: () => void, onSubmi
             type="submit"
             className="w-full mt-8 bg-[#004275] text-white py-4 rounded-2xl font-bold hover:bg-[#005a9c] transition-all active:scale-95 shadow-lg"
           >
-            Create Course
+            {course ? 'Update Course' : 'Create Course'}
           </button>
         </form>
       </div>
@@ -818,8 +865,28 @@ function CreateGroupModal({ onClose, onSubmit }: { onClose: () => void, onSubmit
 function UploadResourceModal({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => void }) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Science');
-  const [type, setType] = useState<'pdf' | 'video' | 'link'>('pdf');
+  const [type, setType] = useState<'pdf' | 'video' | 'link' | 'file'>('pdf');
   const [url, setUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("File size exceeds 5MB limit.");
+        return;
+      }
+      setIsUploading(true);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUrl(reader.result as string);
+        setType(file.type.includes('pdf') ? 'pdf' : (file.type.includes('video') ? 'video' : 'pdf'));
+        if (!title) setTitle(file.name);
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -834,6 +901,31 @@ function UploadResourceModal({ onClose, onSubmit }: { onClose: () => void, onSub
               <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Resource Title</label>
               <input required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none" placeholder="e.g. Biology Lab Notes" value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
+            
+            <div className="p-4 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50 hover:border-[#004275]/20 transition-all text-center">
+              <input 
+                type="file" 
+                id="file-upload" 
+                className="hidden" 
+                onChange={handleFileChange}
+                accept=".pdf,.mp4,.mov,.png,.jpg,.jpeg,.doc,.docx"
+              />
+              <label htmlFor="file-upload" className="cursor-pointer">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="p-3 bg-white rounded-xl shadow-sm text-[#004275]">
+                    {isUploading ? <div className="w-6 h-6 border-2 border-[#004275] border-t-transparent rounded-full animate-spin"></div> : <Plus className="w-6 h-6" />}
+                  </div>
+                  <p className="text-sm font-bold text-gray-600">{url ? 'File Selected' : 'Click to Upload File'}</p>
+                  <p className="text-[10px] text-gray-400 font-medium">PDF, Video, or Image up to 5MB</p>
+                </div>
+              </label>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+              <div className="relative flex justify-center text-[10px] uppercase font-black text-gray-300 tracking-widest"><span className="bg-white px-2 italic">OR ENTER LINK</span></div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Category</label>
@@ -859,7 +951,13 @@ function UploadResourceModal({ onClose, onSubmit }: { onClose: () => void, onSub
               <input required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
             </div>
           </div>
-          <button type="submit" className="w-full mt-8 bg-[#004275] text-white py-4 rounded-2xl font-bold hover:bg-[#005a9c] shadow-lg">Upload Resource</button>
+          <button 
+            type="submit" 
+            disabled={!url || isUploading}
+            className="w-full mt-8 bg-[#004275] text-white py-4 rounded-2xl font-bold hover:bg-[#005a9c] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {isUploading ? 'Encoding...' : 'Upload Resource'}
+          </button>
         </form>
       </div>
     </div>

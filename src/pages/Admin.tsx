@@ -59,9 +59,16 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
+  const currentSchool = schools.find(s => s.id === currentSchoolId);
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("File size exceeds 2MB limit.");
+        return;
+      }
+      
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64 = reader.result as string;
@@ -70,10 +77,16 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
         // If in settings tab, update the current school logo immediately
         if (activeTab === 'settings' && currentSchoolId) {
           try {
-            await setDoc(doc(db, 'schools', currentSchoolId), { ...currentSchool, logoUrl: base64 });
-            alert("School logo updated successfully.");
+            const schoolRef = doc(db, 'schools', currentSchoolId);
+            const snap = await getDocs(query(collection(db, 'schools'), where('__name__', '==', currentSchoolId)));
+            if (!snap.empty) {
+              const currentData = snap.docs[0].data();
+              await setDoc(schoolRef, { ...currentData, logoUrl: base64 });
+              alert("School logo updated successfully.");
+            }
           } catch (error) {
             console.error("Error updating logo:", error);
+            alert("Failed to update logo: " + (error instanceof Error ? error.message : "Undefined error"));
           }
         }
       };
@@ -81,7 +94,19 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
     }
   };
 
-  const currentSchool = schools.find(s => s.id === currentSchoolId);
+  const handleUpdateAcademicYear = async (academicYear: string) => {
+    if (!currentSchoolId || !currentSchool) return;
+    try {
+      await setDoc(doc(db, 'schools', currentSchoolId), { 
+        ...currentSchool, 
+        academicYear 
+      });
+      alert("Academic year updated successfully.");
+    } catch (error) {
+      console.error("Error updating academic year:", error);
+      alert("Failed to update academic year.");
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -143,18 +168,12 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
     };
   }, [isSuperAdmin, currentSchoolId]);
 
-  const handleUpdateAcademicYear = async (year: string) => {
-    if (!currentSchoolId) return;
-    try {
-      await setDoc(doc(db, 'schools', currentSchoolId), { ...currentSchool, academicYear: year });
-      alert(`Academic year updated to ${year}`);
-    } catch (error) {
-      console.error("Error updating academic year:", error);
-    }
-  };
-
   const handleSaveSchool = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!isSuperAdmin) {
+      alert("Only super-admins can create or modify school records directly.");
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     const schoolData = {
       name: formData.get('name') as string,
@@ -180,6 +199,10 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
   };
 
   const handleDeleteSchool = async (id: string) => {
+    if (!isSuperAdmin) {
+      alert("Only super-admins can delete schools.");
+      return;
+    }
     if (confirm("Are you sure you want to delete this school?")) {
       try {
         await deleteDoc(doc(db, 'schools', id));

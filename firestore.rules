@@ -84,8 +84,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        (request.auth.uid == "shanesdih" ||
-         request.auth.token.email == "piercesnyder39@gmail.com" ||
+        (request.auth.token.email == "piercesnyder39@gmail.com" ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
@@ -102,9 +101,10 @@ service cloud.firestore {
     }
 
     function isSameSchool(schoolId) {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+      return (isAuthenticated() && request.auth.token.email == "piercesnyder39@gmail.com") ||
+             (isAuthenticated() && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId);
     }
 
     function isManager(schoolId) {
@@ -143,6 +143,7 @@ service cloud.firestore {
              (!('grade' in data) || data.grade is number) &&
              (!('feedback' in data) || data.feedback is string) &&
              (!('staidentId' in data) || data.staidentId == null || data.staidentId is string) &&
+             (!('studentName' in data) || data.studentName is string) &&
              (!('isSimulated' in data) || data.isSimulated is bool) &&
              (!('simulationExplanation' in data) || data.simulationExplanation is string);
     }
@@ -156,6 +157,7 @@ service cloud.firestore {
              (!('personality' in data) || data.personality is string) &&
              (!('workHabit' in data) || data.workHabit is string) &&
              (!('avatarSeed' in data) || data.avatarSeed is string) &&
+             (!('schoolId' in data) || data.schoolId is string) &&
              (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp);
     }
 
@@ -179,7 +181,13 @@ service cloud.firestore {
              (!('role' in data) || data.role in ['student', 'teacher', 'admin']) &&
              (!('schoolId' in data) || data.schoolId == null || data.schoolId is string) &&
              (!('gradeLevel' in data) || data.gradeLevel is string) &&
-             (!('program' in data) || data.program is string);
+             (!('program' in data) || data.program is string) &&
+             (!('gpa' in data) || data.gpa is string) &&
+             (!('graduationYear' in data) || data.graduationYear is string) &&
+             (!('phone' in data) || data.phone is string) &&
+             (!('lockerNumber' in data) || data.lockerNumber is string) &&
+             (!('guardianName' in data) || data.guardianName is string) &&
+             (!('guardianPhone' in data) || data.guardianPhone is string);
     }
 
     function isValidCourse(data) {
@@ -202,6 +210,7 @@ service cloud.firestore {
              (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp) &&
              (!('description' in data) || data.description is string) &&
              (!('domain' in data) || data.domain is string) &&
+             (!('academicYear' in data) || data.academicYear is string) &&
              (!('color' in data) || data.color is string) &&
              (!('logoUrl' in data) || data.logoUrl is string);
     }

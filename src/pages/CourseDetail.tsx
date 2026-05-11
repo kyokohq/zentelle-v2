@@ -19,6 +19,7 @@ import Materials from './Materials';
 import Gradebook from '../components/Gradebook';
 import { StaidentDashboard } from '../components/StaidentDashboard';
 import { EnrollmentManager } from '../components/EnrollmentManager';
+import { Classmates } from '../components/Classmates';
 import { 
   Megaphone, 
   FileText, 
@@ -226,14 +227,12 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
           icon={<CheckCircle2 className="w-4 h-4" />} 
           label="Grades" 
         />
-        {(userRole === 'admin' || userRole === 'teacher') && (
-          <TabButton 
-            active={activeTab === 'students'} 
-            onClick={() => navigate(`/courses/${courseId}/students`)} 
-            icon={<User className="w-4 h-4" />} 
-            label="Students" 
-          />
-        )}
+        <TabButton 
+          active={activeTab === 'students'} 
+          onClick={() => navigate(`/courses/${courseId}/students`)} 
+          icon={<User className="w-4 h-4" />} 
+          label="Class" 
+        />
         {userRole === 'admin' && (
           <TabButton 
             active={activeTab === 'staidents'} 
@@ -439,7 +438,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
             </motion.div>
           )}
 
-          {activeTab === 'students' && (userRole === 'admin' || userRole === 'teacher') && (
+          {activeTab === 'students' && (
             <motion.div 
               key="students"
               initial={{ opacity: 0, y: 10 }}
@@ -447,7 +446,11 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
               exit={{ opacity: 0, y: -10 }}
               className="p-8"
             >
-              <EnrollmentManager courseId={courseId!} schoolId={course.schoolId} />
+              {userRole === 'admin' || userRole === 'teacher' ? (
+                <EnrollmentManager courseId={courseId!} schoolId={course.schoolId} />
+              ) : (
+                <Classmates courseId={courseId!} />
+              )}
             </motion.div>
           )}
 
@@ -572,6 +575,44 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
                     className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#004275]/20 outline-none transition-all"
                   />
                 </div>
+
+                <div className="p-4 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50 hover:border-[#004275]/20 transition-all text-center">
+                  <input 
+                    type="file" 
+                    id="course-file-upload" 
+                    className="hidden" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert("File size exceeds 5MB limit.");
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setFileForm({
+                            ...fileForm,
+                            url: reader.result as string,
+                            type: file.type.includes('pdf') ? 'pdf' : (file.type.includes('video') ? 'video' : 'pdf'),
+                            title: fileForm.title || file.name
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    accept=".pdf,.mp4,.mov,.png,.jpg,.jpeg,.doc,.docx"
+                  />
+                  <label htmlFor="course-file-upload" className="cursor-pointer">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="p-3 bg-white rounded-xl shadow-sm text-[#004275]">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm font-bold text-gray-600">{fileForm.url ? 'File Selected' : 'Click to Upload File'}</p>
+                      <p className="text-[10px] text-gray-400 font-medium">Max 5MB</p>
+                    </div>
+                  </label>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-black uppercase tracking-widest text-gray-400">Category</label>
@@ -608,7 +649,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
                     className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#004275]/20 outline-none transition-all"
                   />
                 </div>
-                <button type="submit" className="w-full bg-[#004275] text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-[#005a9c] transition-all shadow-lg shadow-[#004275]/20">
+                <button type="submit" disabled={!fileForm.url} className="w-full bg-[#004275] text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-[#005a9c] transition-all shadow-lg shadow-[#004275]/20 disabled:opacity-50">
                   Upload Resource
                 </button>
               </form>

@@ -43,15 +43,6 @@ export function Grades({ courses }: GradesProps) {
               <span>+0.12 from last semester</span>
             </div>
           </div>
-
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-            <h3 className="font-black text-lg text-[#1a1c1c] mb-6 tracking-tight font-headline">Performance Highlights</h3>
-            <div className="space-y-6">
-              <HighlightItem label="Highest Grade" value="94%" course="World History" color="text-green-600" />
-              <HighlightItem label="Lowest Grade" value="88%" course="AP Biology" color="text-orange-600" />
-              <HighlightItem label="Credits Earned" value="18" course="Total" color="text-[#004275]" />
-            </div>
-          </div>
         </div>
 
         {/* Grades Table */}
@@ -89,18 +80,6 @@ export function Grades({ courses }: GradesProps) {
           </table>
         </div>
       </div>
-    </div>
-  );
-}
-
-function HighlightItem({ label, value, course, color }: { label: string, value: string, course: string, color: string }) {
-  return (
-    <div className="flex justify-between items-center">
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">{label}</p>
-        <p className="text-xs font-bold text-gray-600">{course}</p>
-      </div>
-      <span className={`text-xl font-black ${color}`}>{value}</span>
     </div>
   );
 }

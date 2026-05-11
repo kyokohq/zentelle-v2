@@ -102,12 +102,23 @@ export function Layout({ user, userRole, school, children, onAddTask }: LayoutPr
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 h-screen w-64 pt-20 bg-white border-r border-gray-200 z-40 transition-colors duration-300">
         <div className="px-8 mb-8 mt-4">
-          <h2 className="text-[#004275] font-bold text-lg leading-tight font-headline">
-            {school?.name || 'Zentelle Dashboard'}
-          </h2>
-          <p className="text-gray-500 text-xs font-black uppercase tracking-widest opacity-70">
-            {school?.academicYear || 'Academic Year 2024'}
-          </p>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-[#004275] flex items-center justify-center text-white font-bold overflow-hidden shadow-sm">
+              {school?.logoUrl ? (
+                <img src={school.logoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                school?.name?.charAt(0) || 'Z'
+              )}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-[#004275] font-bold text-sm leading-tight font-headline truncate">
+                {school?.name || 'Zentelle Dashboard'}
+              </h2>
+              <p className="text-gray-500 text-[9px] font-black uppercase tracking-widest opacity-70 truncate">
+                {school?.academicYear || 'Academic Year 2024'}
+              </p>
+            </div>
+          </div>
         </div>
         <nav className="flex flex-col gap-1 pr-4">
           <SidebarLink to="/" icon={<Megaphone className="w-5 h-5" />} label="Updates" active={location.pathname === '/'} />

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Megaphone, 
   Star, 
@@ -12,7 +13,8 @@ import {
   Trash2,
   ChevronRight,
   Plus,
-  FileText
+  FileText,
+  Edit2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Course, Activity, Reminder, Event, Task } from '../types';
@@ -28,6 +30,8 @@ interface DashboardProps {
   loading: boolean;
   onJoinCourse: () => void;
   onCreateCourse: () => void;
+  onEditCourse: (course: Course) => void;
+  onDeleteCourse: (id: string) => void;
   onDeleteReminder: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTask: (task: Task) => void;
@@ -44,6 +48,8 @@ export function Dashboard({
   loading, 
   onJoinCourse, 
   onCreateCourse,
+  onEditCourse,
+  onDeleteCourse,
   onDeleteReminder,
   onDeleteTask,
   onToggleTask
@@ -82,7 +88,7 @@ export function Dashboard({
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           <AnimatePresence mode="popLayout">
             {courses.map((course) => (
-              <CourseCard key={course.id} {...course} />
+              <CourseCard key={course.id} {...course} userRole={userRole} onEdit={() => onEditCourse(course)} onDelete={() => onDeleteCourse(course.id)} />
             ))}
           </AnimatePresence>
           {loading && courses.length === 0 && (
@@ -228,7 +234,9 @@ export function Dashboard({
   );
 }
 
-function CourseCard({ title, instructor, section, grade, tag, color, image }: Course) {
+function CourseCard({ id, title, instructor, section, grade, tag, color, image, userRole, onEdit, onDelete }: Course & { userRole?: string, onEdit: () => void, onDelete: () => void }) {
+  const navigate = useNavigate();
+
   return (
     <motion.div 
       layout
@@ -236,8 +244,25 @@ function CourseCard({ title, instructor, section, grade, tag, color, image }: Co
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       whileHover={{ y: -4 }}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300 cursor-pointer"
+      onClick={() => navigate(`/courses/${id}`)}
+      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300 cursor-pointer relative"
     >
+      {(userRole === 'admin' || userRole === 'teacher') && (
+        <div className="absolute top-2 right-2 flex gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="p-1.5 bg-white/90 backdrop-blur shadow-sm rounded-lg text-blue-600 hover:bg-blue-600 hover:text-white transition-all"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="p-1.5 bg-white/90 backdrop-blur shadow-sm rounded-lg text-red-600 hover:bg-red-600 hover:text-white transition-all"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
       <div className={`h-32 ${color} relative overflow-hidden`}>
         <img 
           className="w-full h-full object-cover mix-blend-overlay opacity-60 group-hover:scale-110 transition-transform duration-700" 
@@ -257,9 +282,9 @@ function CourseCard({ title, instructor, section, grade, tag, color, image }: Co
         <p className="text-gray-500 text-xs mb-4 font-medium opacity-80">{section} • {instructor}</p>
         <div className="flex justify-between items-center pt-5 border-t border-gray-100">
           <div className="flex gap-4 text-gray-400">
-            <Megaphone className="w-5 h-5 hover:text-[#004275] transition-colors" />
-            <FileText className="w-5 h-5 hover:text-[#004275] transition-colors" />
-            <MessageSquare className="w-5 h-5 hover:text-[#004275] transition-colors" />
+            <Megaphone onClick={(e) => { e.stopPropagation(); navigate(`/courses/${id}/updates`); }} className="w-5 h-5 hover:text-[#004275] transition-colors" />
+            <FileText onClick={(e) => { e.stopPropagation(); navigate(`/courses/${id}/files`); }} className="w-5 h-5 hover:text-[#004275] transition-colors" />
+            <MessageSquare onClick={(e) => { e.stopPropagation(); navigate(`/courses/${id}/chat`); }} className="w-5 h-5 hover:text-[#004275] transition-colors" />
           </div>
           <span className="text-xs font-bold text-[#004275] bg-[#004275]/5 px-2 py-1 rounded">{grade}</span>
         </div>

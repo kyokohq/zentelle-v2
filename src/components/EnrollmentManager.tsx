@@ -35,14 +35,23 @@ export function EnrollmentManager({ courseId, schoolId }: { courseId: string, sc
     // Listen for enrollments
     const qEnrollments = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
     const unsubEnrollments = onSnapshot(qEnrollments, async (snapshot) => {
-      const studentIds = snapshot.docs.map(doc => doc.data().studentId);
+      const studentIds = snapshot.docs.map(doc => doc.data().uid || doc.data().studentId || doc.id.split('_')[0]);
       
       if (studentIds.length > 0) {
-        const studentDocs = await Promise.all(
-          studentIds.map(id => getDocs(query(collection(db, 'users'), where('uid', '==', id))))
-        );
-        const students = studentDocs.flatMap(snap => snap.docs.map(d => d.data() as UserProfile));
-        setEnrolledStudents(students);
+        setLoading(true);
+        // Fetch students in batches
+        const batches = [];
+        for (let i = 0; i < studentIds.length; i += 10) {
+          batches.push(studentIds.slice(i, i + 10));
+        }
+
+        const studentData: UserProfile[] = [];
+        for (const batch of batches) {
+          const q = query(collection(db, 'users'), where('uid', 'in', batch));
+          const snap = await getDocs(q);
+          studentData.push(...snap.docs.map(d => d.data() as UserProfile));
+        }
+        setEnrolledStudents(studentData);
       } else {
         setEnrolledStudents([]);
       }
@@ -50,6 +59,11 @@ export function EnrollmentManager({ courseId, schoolId }: { courseId: string, sc
     });
 
     // Fetch all students in school for adding
+    if (!schoolId) {
+      setAllStudents([]);
+      return;
+    }
+
     const qAllStudents = query(
       collection(db, 'users'), 
       where('schoolId', '==', schoolId),
@@ -68,7 +82,7 @@ export function EnrollmentManager({ courseId, schoolId }: { courseId: string, sc
   const enrollStudent = async (student: UserProfile) => {
     try {
       await setDoc(doc(db, 'enrollments', `${student.uid}_${courseId}`), {
-        studentId: student.uid,
+        uid: student.uid,
         courseId: courseId,
         studentName: student.displayName,
         grade: 'N/A',

@@ -2,16 +2,18 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Course } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Megaphone, FileText, MessageSquare, Plus, Search, Filter } from 'lucide-react';
+import { Megaphone, FileText, MessageSquare, Plus, Search, Filter, Edit2, Trash2 } from 'lucide-react';
 
 interface CoursesProps {
   courses: Course[];
   userRole?: 'student' | 'teacher' | 'admin';
   onJoinCourse: () => void;
   onCreateCourse: () => void;
+  onEditCourse: (course: Course) => void;
+  onDeleteCourse: (id: string) => void;
 }
 
-export function Courses({ courses, userRole, onJoinCourse, onCreateCourse }: CoursesProps) {
+export function Courses({ courses, userRole, onJoinCourse, onCreateCourse, onEditCourse, onDeleteCourse }: CoursesProps) {
   const navigate = useNavigate();
 
   return (
@@ -55,7 +57,14 @@ export function Courses({ courses, userRole, onJoinCourse, onCreateCourse }: Cou
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         <AnimatePresence mode="popLayout">
           {courses.map((course) => (
-            <CourseCard key={course.id} {...course} onNavigate={(tab) => navigate(`/courses/${course.id}`, { state: { activeTab: tab } })} />
+            <CourseCard 
+              key={course.id} 
+              {...course} 
+              userRole={userRole}
+              onEdit={() => onEditCourse(course)}
+              onDelete={() => onDeleteCourse(course.id)}
+              onNavigate={(tab) => navigate(`/courses/${course.id}`, { state: { activeTab: tab } })} 
+            />
           ))}
         </AnimatePresence>
       </section>
@@ -80,10 +89,13 @@ export function Courses({ courses, userRole, onJoinCourse, onCreateCourse }: Cou
 }
 
 interface CourseCardProps extends Course {
+  userRole?: string;
+  onEdit: () => void;
+  onDelete: () => void;
   onNavigate: (tab?: string) => void;
 }
 
-function CourseCard({ id, title, instructor, section, grade, tag, color, image, onNavigate }: CourseCardProps) {
+function CourseCard({ id, title, instructor, section, grade, tag, color, image, userRole, onEdit, onDelete, onNavigate }: CourseCardProps) {
   return (
     <motion.div 
       layout
@@ -92,8 +104,24 @@ function CourseCard({ id, title, instructor, section, grade, tag, color, image, 
       exit={{ opacity: 0, scale: 0.9 }}
       whileHover={{ y: -4 }}
       onClick={() => onNavigate()}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300 cursor-pointer"
+      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300 cursor-pointer relative"
     >
+      {(userRole === 'admin' || userRole === 'teacher') && (
+        <div className="absolute top-2 right-2 flex gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            className="p-1.5 bg-white/90 backdrop-blur shadow-sm rounded-lg text-blue-600 hover:bg-blue-600 hover:text-white transition-all"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="p-1.5 bg-white/90 backdrop-blur shadow-sm rounded-lg text-red-600 hover:bg-red-600 hover:text-white transition-all"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
       <div className={`h-40 ${color} relative overflow-hidden`}>
         <img 
           className="w-full h-full object-cover mix-blend-overlay opacity-60 group-hover:scale-110 transition-transform duration-700" 
