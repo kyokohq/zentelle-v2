@@ -26,7 +26,7 @@ import {
   serverTimestamp,
   writeBatch
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { QuizQuestion, Material } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -112,6 +112,11 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
       return;
     }
 
+    if (!auth.currentUser) {
+      alert("Please sign in to save.");
+      return;
+    }
+
     setSaving(true);
     try {
       let finalQuizId = quizId;
@@ -124,7 +129,7 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
         points: questions.length * 10, // Example scoring
         timestamp: serverTimestamp(),
         published: true,
-        uid: (await getDoc(doc(db, 'users', 'shanesdih'))).id // Placeholder for current user if not available
+        uid: auth.currentUser.uid
       };
 
       if (!finalQuizId) {

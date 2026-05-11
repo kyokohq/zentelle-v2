@@ -114,20 +114,21 @@ service cloud.firestore {
     function isValidMaterial(data) {
       return data.keys().hasAll(['courseId', 'type', 'title', 'uid', 'timestamp', 'published']) &&
              data.courseId is string &&
-             data.type in ['folder', 'assignment', 'file', 'link'] &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.type is string &&
+             data.title is string && data.title.size() > 0 &&
              data.uid is string &&
-             (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp) &&
              data.published is bool &&
              (!('parentId' in data) || data.parentId == null || data.parentId is string) &&
              (!('description' in data) || data.description == null || data.description is string) &&
              (!('url' in data) || data.url == null || data.url is string) &&
-             (!('color' in data) || data.color == null || (data.color is string && data.color.matches("^#[0-9A-Fa-f]{6}$"))) &&
+             (!('color' in data) || data.color == null || data.color is string) &&
              (!('googleDriveFileId' in data) || data.googleDriveFileId == null || data.googleDriveFileId is string) &&
              (!('googleDriveTemplateId' in data) || data.googleDriveTemplateId == null || data.googleDriveTemplateId is string) &&
+             (!('googleDriveTemplateType' in data) || data.googleDriveTemplateType == null || data.googleDriveTemplateType is string) &&
              (!('order' in data) || data.order is number) &&
              (!('points' in data) || data.points is number) &&
-             (!('dueDate' in data) || data.dueDate == null || data.dueDate is string || data.dueDate is timestamp);
+             (!('dueDate' in data) || data.dueDate == null || data.dueDate is string || data.dueDate is timestamp) &&
+             (!('timestamp' in data) || data.timestamp is timestamp || data.timestamp is string);
     }
 
     function isValidSubmission(data) {
@@ -135,7 +136,6 @@ service cloud.firestore {
              data.materialId is string &&
              data.uid is string &&
              data.status in ['draft', 'submitted'] &&
-             (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp) &&
              (!('submittedAt' in data) || data.submittedAt is timestamp) &&
              (!('googleDriveFileId' in data) || data.googleDriveFileId == null || data.googleDriveFileId is string) &&
              (!('fileUrl' in data) || data.fileUrl == null || data.fileUrl is string) &&
@@ -146,7 +146,10 @@ service cloud.firestore {
              (!('staidentId' in data) || data.staidentId == null || data.staidentId is string) &&
              (!('studentName' in data) || data.studentName is string) &&
              (!('isSimulated' in data) || data.isSimulated is bool) &&
-             (!('simulationExplanation' in data) || data.simulationExplanation is string);
+             (!('simulationExplanation' in data) || data.simulationExplanation is string) &&
+             (!('answers' in data) || data.answers is map) &&
+             (!('score' in data) || data.score is number) &&
+             (!('timestamp' in data) || data.timestamp is timestamp || data.timestamp is string);
     }
 
     function isValidQuiz(data) {
