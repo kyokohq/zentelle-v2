@@ -47,19 +47,30 @@ export function EnrollmentManager({ courseId, schoolId }: { courseId: string, sc
 
         const studentData: UserProfile[] = [];
         for (const batch of batches) {
-          const q = query(collection(db, 'users'), where('uid', 'in', batch));
-          const snap = await getDocs(q);
-          studentData.push(...snap.docs.map(d => d.data() as UserProfile));
+          // Additional safety check for batch content
+          const validIds = batch.filter(id => id && typeof id === 'string');
+          if (validIds.length === 0) continue;
+
+          const q = query(collection(db, 'users'), where('uid', 'in', validIds));
+          try {
+            const snap = await getDocs(q);
+            studentData.push(...snap.docs.map(d => d.data() as UserProfile));
+          } catch (e) {
+            console.error("Batch fetch error:", e);
+          }
         }
         setEnrolledStudents(studentData);
       } else {
         setEnrolledStudents([]);
       }
       setLoading(false);
+    }, (error) => {
+      console.error("Enrollment snapshot error:", error);
+      setLoading(false);
     });
 
     // Fetch all students in school for adding
-    if (!schoolId) {
+    if (!schoolId || typeof schoolId !== 'string') {
       setAllStudents([]);
       return;
     }
@@ -71,6 +82,8 @@ export function EnrollmentManager({ courseId, schoolId }: { courseId: string, sc
     );
     const unsubAllStudents = onSnapshot(qAllStudents, (snapshot) => {
       setAllStudents(snapshot.docs.map(doc => doc.data() as UserProfile));
+    }, (error) => {
+      console.error("All students snapshot error:", error);
     });
 
     return () => {

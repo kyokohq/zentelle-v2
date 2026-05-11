@@ -152,12 +152,19 @@ async function startServer() {
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash", // Use a stable model
-        contents: prompt
-      });
-      res.json({ text: response.text });
+      // In @google/genai 0.x, the constructor often takes the key directly
+      // or as { apiKey: ... }. We'll try the most flexible way.
+      let genAI;
+      try {
+        genAI = new GoogleGenAI(process.env.GEMINI_API_KEY!);
+      } catch (e) {
+        genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      }
+      
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      res.json({ text: response.text() });
     } catch (error: any) {
       console.error("Gemini Proxy Error:", error);
       res.status(500).json({ 

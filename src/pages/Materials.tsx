@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
+  Loader2,
   LayoutGrid,
   List as ListIcon,
   Search,
@@ -290,6 +291,8 @@ export default function Materials({
   const [newMaterialDescription, setNewMaterialDescription] = useState('');
   const [newMaterialColor, setNewMaterialColor] = useState(COLORS[0]);
   const [newMaterialLink, setNewMaterialLink] = useState('');
+  const [newMaterialFile, setNewMaterialFile] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [newMaterialTemplateId, setNewMaterialTemplateId] = useState('');
   const [newMaterialTemplateType, setNewMaterialTemplateType] = useState<'document' | 'presentation' | 'spreadsheet'>('document');
   const [newMaterialPoints, setNewMaterialPoints] = useState<number>(100);
@@ -475,6 +478,8 @@ export default function Materials({
       materialData.color = newMaterialColor;
     } else if (newMaterialType === 'link') {
       materialData.url = newMaterialLink;
+    } else if (newMaterialType === 'file') {
+      materialData.url = newMaterialFile || newMaterialLink;
     } else if (newMaterialType === 'assignment') {
       materialData.googleDriveTemplateId = newMaterialTemplateId || null;
       materialData.googleDriveTemplateType = newMaterialTemplateId ? newMaterialTemplateType : null;
@@ -495,6 +500,24 @@ export default function Materials({
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert("File size exceeds 10MB limit.");
+        return;
+      }
+      setIsUploading(true);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewMaterialFile(reader.result as string);
+        if (!newMaterialTitle) setNewMaterialTitle(file.name);
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleEditClick = (material: Material) => {
     setIsEditing(true);
     setEditingMaterialId(material.id);
@@ -503,6 +526,7 @@ export default function Materials({
     setNewMaterialDescription(material.description || '');
     setNewMaterialColor(material.color || COLORS[0]);
     setNewMaterialLink(material.url || '');
+    setNewMaterialFile(material.type === 'file' ? material.url || '' : null);
     setNewMaterialTemplateId(material.googleDriveTemplateId || '');
     setNewMaterialTemplateType(material.googleDriveTemplateType || 'document');
     setNewMaterialPoints(material.points || 100);
@@ -524,6 +548,8 @@ export default function Materials({
     setNewMaterialDescription('');
     setNewMaterialColor(COLORS[0]);
     setNewMaterialLink('');
+    setNewMaterialFile(null);
+    setIsUploading(false);
     setNewMaterialTemplateId('');
     setNewMaterialTemplateType('document');
     setNewMaterialPoints(100);
@@ -875,6 +901,55 @@ export default function Materials({
                       onChange={(e) => setNewMaterialLink(e.target.value)}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
                       placeholder="https://example.com"
+                    />
+                  </div>
+                )}
+
+                {newMaterialType === 'file' && (
+                  <div className="space-y-4">
+                    <div className="p-8 border-2 border-dashed border-gray-200 rounded-[32px] bg-gray-50/50 hover:border-[#004275]/20 hover:bg-[#004275]/5 transition-all text-center group cursor-pointer relative">
+                      <input 
+                        type="file" 
+                        id="material-file-upload" 
+                        className="hidden" 
+                        onChange={handleFileChange}
+                      />
+                      <label htmlFor="material-file-upload" className="cursor-pointer">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className={`p-4 rounded-2xl bg-white shadow-sm transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 ${isUploading ? 'animate-pulse' : ''}`}>
+                            {isUploading ? (
+                              <Loader2 className="w-8 h-8 text-[#004275] animate-spin" />
+                            ) : (
+                              <Plus className="w-8 h-8 text-[#004275]" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-lg font-black text-gray-900 font-headline">
+                              {newMaterialFile ? 'File Selected' : 'Upload File'}
+                            </p>
+                            <p className="text-sm text-gray-500 font-medium">Click to select or drag and drop</p>
+                          </div>
+                          {newMaterialFile && (
+                            <div className="mt-2 px-3 py-1 bg-[#004275] text-white text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center gap-2">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Ready to update
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+                      <div className="relative flex justify-center text-[10px] uppercase font-black text-gray-300 tracking-widest"><span className="bg-white px-2 italic">OR ENTER LINK</span></div>
+                    </div>
+
+                    <input 
+                      type="url" 
+                      value={newMaterialLink}
+                      onChange={(e) => setNewMaterialLink(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#004275] focus:border-transparent outline-none transition-all"
+                      placeholder="Paste file URL here..."
                     />
                   </div>
                 )}

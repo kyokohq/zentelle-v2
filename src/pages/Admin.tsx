@@ -124,6 +124,9 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
     if (!isSuperAdmin && currentSchoolId) {
       usersQuery = query(collection(db, 'users'), where('schoolId', '==', currentSchoolId));
       setActiveTab('users'); // Default to users if not super admin
+    } else if (!isSuperAdmin && !currentSchoolId) {
+      // Emergency fallback for users without a school who managed to get here
+      usersQuery = query(collection(db, 'users'), where('uid', '==', currentUserId));
     }
 
     const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
@@ -255,7 +258,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
     const updatedUser = {
       ...editingUser,
       role: formData.get('role') as 'student' | 'teacher' | 'admin',
-      schoolId: formData.get('schoolId') as string || currentSchoolId,
+      schoolId: isSuperAdmin ? (formData.get('schoolId') as string || currentSchoolId) : currentSchoolId,
       gradeLevel: formData.get('gradeLevel') as string || '',
       program: formData.get('program') as string || '',
       gpa: formData.get('gpa') as string || editingUser.gpa,

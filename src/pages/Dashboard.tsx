@@ -61,24 +61,33 @@ export function Dashboard({
       {/* Left Content Area */}
       <div className="col-span-12 lg:col-span-8 space-y-12">
         {/* Welcome Header */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-[#1a1c1c] tracking-tight mb-1 font-headline">Course Dashboard</h1>
-            <p className="text-gray-600 font-medium text-sm">Welcome back, {user.displayName?.split(' ')[0]}. You have <span className="text-[#004275] font-bold">{pendingTasks.length} tasks</span> pending today.</p>
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#004275]/5 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 duration-700"></div>
+          <div className="relative z-10">
+            <h1 className="text-4xl font-black text-[#1a1c1c] tracking-tight mb-2 font-headline bg-clip-text text-transparent bg-gradient-to-r from-[#004275] to-[#005a9c]">
+              Course Dashboard
+            </h1>
+            <p className="text-gray-500 font-medium text-sm flex items-center gap-2">
+              Welcome back, <span className="text-[#004275] font-black">{user.displayName?.split(' ')[0]}</span>. 
+              <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+              You have <span className="text-[#004275] font-bold underline decoration-2 decoration-[#004275]/20">{pendingTasks.length} tasks</span> pending.
+            </p>
           </div>
-          <div className="flex gap-3 w-full md:w-auto">
+          <div className="flex gap-3 w-full md:w-auto relative z-10">
             <button 
               onClick={onJoinCourse}
-              className="flex-1 md:flex-none bg-white border border-[#004275] text-[#004275] hover:bg-[#004275]/5 px-7 py-3 rounded-xl font-bold text-sm shadow-sm transition-all duration-200 active:scale-95"
+              className="flex-1 md:flex-none bg-white border-2 border-gray-100 text-[#004275] hover:border-[#004275] px-8 py-3.5 rounded-2xl font-bold text-sm shadow-sm transition-all duration-300 active:scale-95 flex items-center justify-center gap-2"
             >
-              Join New Course
+              <Plus className="w-4 h-4" />
+              Join Course
             </button>
             {userRole === 'admin' && (
               <button 
                 onClick={onCreateCourse}
-                className="flex-1 md:flex-none bg-[#004275] hover:bg-[#005a9c] text-white px-7 py-3 rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-95 transform hover:-translate-y-0.5"
+                className="flex-1 md:flex-none bg-[#004275] hover:bg-[#005a9c] text-white px-8 py-3.5 rounded-2xl font-bold text-sm shadow-lg shadow-blue-900/20 hover:shadow-xl transition-all duration-300 active:scale-95 transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
               >
-                Create Course
+                <Plus className="w-4 h-4" />
+                Create Path
               </button>
             )}
           </div>
@@ -244,7 +253,14 @@ function CourseCard({ id, title, instructor, section, grade, tag, color, image, 
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       whileHover={{ y: -4 }}
-      onClick={() => navigate(`/courses/${id}`)}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Navigating to course:', id);
+        if (id) {
+          navigate(`/courses/${id}`);
+        }
+      }}
       className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300 cursor-pointer relative"
     >
       {(userRole === 'admin' || userRole === 'teacher') && (

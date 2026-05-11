@@ -20,7 +20,9 @@ export function Classmates({ courseId }: { courseId: string }) {
 
     const qEnrollments = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
     const unsubEnrollments = onSnapshot(qEnrollments, async (snapshot) => {
-      const studentIds = snapshot.docs.map(doc => doc.data().studentId || doc.id.split('_')[0]);
+      const studentIds = snapshot.docs
+        .map(doc => doc.data().studentId || doc.id.split('_')[0])
+        .filter(id => id && typeof id === 'string');
       
       if (studentIds.length > 0) {
         // Fetch students in batches of 10 to avoid query limits

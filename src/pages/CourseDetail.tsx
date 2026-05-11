@@ -447,7 +447,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
               className="p-8"
             >
               {userRole === 'admin' || userRole === 'teacher' ? (
-                <EnrollmentManager courseId={courseId!} schoolId={course.schoolId} />
+                <EnrollmentManager courseId={courseId!} schoolId={course.schoolId || ''} />
               ) : (
                 <Classmates courseId={courseId!} />
               )}
