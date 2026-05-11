@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   Bell, 
   Mail, 
@@ -45,7 +44,7 @@ export function Layout({ user, userRole, school, children, onAddTask }: LayoutPr
   };
 
   return (
-    <div className="min-h-screen bg-[#f9f9f9]">
+    <div className="min-h-screen bg-[#f9f9f9] transition-colors duration-300">
       {/* Top Navigation */}
       <nav className="fixed top-0 w-full flex justify-between items-center px-6 h-16 bg-[#004275] z-50 shadow-lg shadow-blue-900/10">
         <div className="flex items-center gap-8">
@@ -66,6 +65,7 @@ export function Layout({ user, userRole, school, children, onAddTask }: LayoutPr
               type="text"
             />
           </div>
+          
           <button className="p-2.5 hover:bg-white/15 active:bg-white/20 rounded-full transition-all text-white relative">
             <Mail className="w-5 h-5" />
           </button>
@@ -100,13 +100,13 @@ export function Layout({ user, userRole, school, children, onAddTask }: LayoutPr
       </nav>
 
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-screen w-64 pt-20 bg-white border-r border-gray-200 z-40">
+      <aside className="fixed left-0 top-0 h-screen w-64 pt-20 bg-white border-r border-gray-200 z-40 transition-colors duration-300">
         <div className="px-8 mb-8 mt-4">
           <h2 className="text-[#004275] font-bold text-lg leading-tight font-headline">
             {school?.name || 'Zentelle Dashboard'}
           </h2>
-          <p className="text-gray-500 text-xs font-medium opacity-70">
-            {school?.domain || 'Academic Year 2024'}
+          <p className="text-gray-500 text-xs font-black uppercase tracking-widest opacity-70">
+            {school?.academicYear || 'Academic Year 2024'}
           </p>
         </div>
         <nav className="flex flex-col gap-1 pr-4">

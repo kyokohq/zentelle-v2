@@ -910,7 +910,7 @@ export default function Materials({
                           <Cloud className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                          <h4 className={`font-bold ${isGoogleAuth ? 'text-green-900' : 'text-blue-900'}`}>Google Drive Integration</h4>
+                          <h4 className={`font-bold ${isGoogleAuth ? 'text-green-900' : 'text-blue-900'}`}>Drive Integration</h4>
                           <p className={`text-xs ${isGoogleAuth ? 'text-green-700' : 'text-blue-700'}`}>
                             {isGoogleAuth ? 'Connected to Google Drive' : 'Connect a template to automatically create copies for students.'}
                           </p>

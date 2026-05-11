@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { google } from "googleapis";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
@@ -133,6 +134,26 @@ async function startServer() {
       res.json(response.data);
     } catch (error: any) {
       console.error("Error updating permissions:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Gemini AI Proxy Route
+  app.post("/api/ai/generate", async (req, res) => {
+    const { prompt } = req.body;
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: "Gemini API key not configured on server" });
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt
+      });
+      res.json({ text: response.text });
+    } catch (error: any) {
+      console.error("Gemini Proxy Error:", error);
       res.status(500).json({ error: error.message });
     }
   });

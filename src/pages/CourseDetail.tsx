@@ -331,7 +331,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
                   Upload File
                 </button>
               </div>
-
+ 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {resources.length > 0 ? resources.map((resource) => (
                   <a 
@@ -465,10 +465,9 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
         </AnimatePresence>
       </div>
 
-      {/* New Update Modal */}
       <AnimatePresence>
         {showUpdateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}

@@ -201,16 +201,16 @@ export function Onboarding({ userProfile, onComplete }: OnboardingProps) {
                       name="color"
                       type="color"
                       defaultValue="#004275"
-                      className="w-full h-14 bg-gray-50 border border-gray-200 rounded-2xl px-2 py-2 outline-none"
+                      className="w-full h-14 bg-gray-50 border border-gray-200 rounded-2xl px-2 py-2 outline-none cursor-pointer"
                     />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black uppercase tracking-widest text-gray-400">Academic Level</label>
                     <select className="w-full h-14 bg-gray-50 border border-gray-200 rounded-2xl px-6 outline-none font-bold">
-                      <option>High School</option>
-                      <option>University</option>
-                      <option>Primary School</option>
-                      <option>Other</option>
+                      <option className="bg-white">High School</option>
+                      <option className="bg-white">University</option>
+                      <option className="bg-white">Primary School</option>
+                      <option className="bg-white">Other</option>
                     </select>
                   </div>
                 </div>

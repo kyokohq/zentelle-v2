@@ -92,8 +92,9 @@ service cloud.firestore {
 
     function isTeacher() {
       return isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+        (request.auth.token.email == "piercesnyder39@gmail.com" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'));
     }
 
     function isStaff() {
@@ -156,6 +157,16 @@ service cloud.firestore {
              (!('workHabit' in data) || data.workHabit is string) &&
              (!('avatarSeed' in data) || data.avatarSeed is string) &&
              (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp);
+    }
+
+    function isValidStaidentMessage(data) {
+      return data.keys().hasAll(['staidentId', 'courseId', 'text', 'uid', 'timestamp', 'isFromStaident']) &&
+             data.staidentId is string &&
+             data.courseId is string &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.uid is string &&
+             data.isFromStaident is bool &&
+             (!('authorName' in data) || data.authorName is string);
     }
 
     // Domain Validators
@@ -355,13 +366,32 @@ service cloud.firestore {
       allow read: if isDocOwner() || isStaff();
       allow create: if (isRequestOwner() || isStaff()) && isValidSubmission(request.resource.data);
       allow update: if (isDocOwner() || isStaff()) && isValidSubmission(request.resource.data) && (isStaff() || request.resource.data.uid == resource.data.uid);
-      allow delete: if isDocOwner() || isStaff();
+      allow delete: if isStaff();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.uid);
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /discipline/{referralId} {
+      allow read: if isStaff() || (isAuthenticated() && request.auth.uid == resource.data.uid);
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
     match /staidents/{staidentId} {
       allow read: if isAuthenticated();
       allow create: if isStaff() && isValidStaident(request.resource.data);
       allow update: if isStaff() && isValidStaident(request.resource.data);
+      allow delete: if isStaff();
+    }
+
+    match /staident_messages/{messageId} {
+      allow read: if isStaff();
+      allow create: if (isStaff() || request.resource.data.isFromStaident == true) && isValidStaidentMessage(request.resource.data);
+      allow update: if false;
       allow delete: if isStaff();
     }
   }

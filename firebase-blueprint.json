@@ -217,6 +217,21 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["courseId", "text", "uid", "timestamp"]
+    },
+    "StaidentMessage": {
+      "title": "StaidentMessage",
+      "description": "A direct message to or from a Staident",
+      "type": "object",
+      "properties": {
+        "staidentId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "text": { "type": "string" },
+        "uid": { "type": "string" },
+        "authorName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isFromStaident": { "type": "boolean" }
+      },
+      "required": ["staidentId", "courseId", "text", "uid", "timestamp", "isFromStaident"]
     }
   },
   "firestore": {
@@ -275,6 +290,10 @@
     "/staidents/{staidentId}": {
       "schema": "Staident",
       "description": "AI Practice Students"
+    },
+    "/staident_messages/{messageId}": {
+      "schema": "StaidentMessage",
+      "description": "Direct messages with AI students"
     }
   }
 }

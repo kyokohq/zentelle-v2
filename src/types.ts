@@ -7,6 +7,15 @@ export interface UserProfile {
   schoolId?: string | null;
   gradeLevel?: string;
   program?: string;
+  // SIS Fields
+  dob?: string;
+  phone?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  enrollmentDate?: any;
+  graduationYear?: string;
+  gpa?: string;
+  lockerNumber?: string;
 }
 
 export interface School {
@@ -18,6 +27,7 @@ export interface School {
   logoUrl?: string;
   uid: string;
   timestamp: any;
+  academicYear?: string;
 }
 
 export interface Course {
@@ -150,6 +160,7 @@ export interface Submission {
 export interface Staident {
   id: string;
   courseId: string;
+  schoolId?: string; // Added for SIS tracking
   name: string;
   personality: string;
   skillLevel: 'low' | 'average' | 'exceptional';
@@ -166,6 +177,61 @@ export enum OperationType {
   LIST = 'list',
   GET = 'get',
   WRITE = 'write',
+}
+
+export interface StudentProfile extends UserProfile {
+  dob?: string;
+  address?: string;
+  phone?: string;
+  guardianIds?: string[];
+  enrollmentDate?: any;
+  graduationYear?: string;
+  gpa?: string;
+  rank?: number;
+  athleticEligibility?: boolean;
+  specialEd?: boolean;
+  disciplineRecords?: DisciplineRecord[];
+  healthNotes?: string;
+}
+
+export interface Guardian {
+  id: string;
+  name: string;
+  relation: string;
+  phone: string;
+  email: string;
+  isPrimary: boolean;
+  studentIds: string[];
+}
+
+export interface DisciplineRecord {
+  id: string;
+  date: any;
+  incidentType: string;
+  description: string;
+  penalty: string;
+  staffUid: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  studentUid: string;
+  courseId?: string; // Optional for daily vs period attendance
+  date: any;
+  status: 'present' | 'absent' | 'tardy' | 'excused';
+  notes?: string;
+  recordedBy: string;
+}
+
+export interface StaidentMessage {
+  id: string;
+  staidentId: string;
+  courseId: string;
+  text: string;
+  uid: string;
+  authorName: string;
+  timestamp: any;
+  isFromStaident: boolean;
 }
 
 export interface FirestoreErrorInfo {

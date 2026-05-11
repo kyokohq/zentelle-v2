@@ -7,6 +7,6 @@
 
 @layer base {
   body {
-    @apply bg-[#f9f9f9] text-[#1a1c1c] font-sans;
+    @apply bg-[#f9f9f9] text-[#1a1c1c] font-sans transition-colors duration-300;
   }
 }
