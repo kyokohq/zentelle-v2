@@ -6,7 +6,7 @@ import { Megaphone, FileText, MessageSquare, Plus, Search, Filter } from 'lucide
 
 interface CoursesProps {
   courses: Course[];
-  userRole?: 'student' | 'admin';
+  userRole?: 'student' | 'teacher' | 'admin';
   onJoinCourse: () => void;
   onCreateCourse: () => void;
 }

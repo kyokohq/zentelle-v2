@@ -19,7 +19,7 @@ import { Course, Activity, Reminder, Event, Task } from '../types';
 
 interface DashboardProps {
   user: any;
-  userRole?: 'student' | 'admin';
+  userRole?: 'student' | 'teacher' | 'admin';
   courses: Course[];
   activities: Activity[];
   reminders: Reminder[];

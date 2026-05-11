@@ -90,6 +90,26 @@ service cloud.firestore {
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
+    function isTeacher() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    function isStaff() {
+      return isAdmin() || isTeacher();
+    }
+
+    function isSameSchool(schoolId) {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    function isManager(schoolId) {
+      return isAdmin() && isSameSchool(schoolId);
+    }
+
     function isValidMaterial(data) {
       return data.keys().hasAll(['courseId', 'type', 'title', 'uid', 'timestamp', 'published']) &&
              data.courseId is string &&
@@ -99,24 +119,43 @@ service cloud.firestore {
              (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp) &&
              data.published is bool &&
              (!('parentId' in data) || data.parentId == null || data.parentId is string) &&
-             (!('description' in data) || data.description is string) &&
-             (!('url' in data) || data.url is string) &&
-             (!('color' in data) || (data.color is string && data.color.matches("^#[0-9A-Fa-f]{6}$"))) &&
-             (!('googleDriveFileId' in data) || data.googleDriveFileId is string) &&
-             (!('googleDriveTemplateId' in data) || data.googleDriveTemplateId is string) &&
+             (!('description' in data) || data.description == null || data.description is string) &&
+             (!('url' in data) || data.url == null || data.url is string) &&
+             (!('color' in data) || data.color == null || (data.color is string && data.color.matches("^#[0-9A-Fa-f]{6}$"))) &&
+             (!('googleDriveFileId' in data) || data.googleDriveFileId == null || data.googleDriveFileId is string) &&
+             (!('googleDriveTemplateId' in data) || data.googleDriveTemplateId == null || data.googleDriveTemplateId is string) &&
              (!('order' in data) || data.order is number) &&
              (!('points' in data) || data.points is number) &&
              (!('dueDate' in data) || data.dueDate == null || data.dueDate is string || data.dueDate is timestamp);
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasAll(['materialId', 'uid', 'googleDriveFileId', 'status', 'timestamp']) &&
+      return data.keys().hasAll(['materialId', 'uid', 'status', 'timestamp']) &&
              data.materialId is string &&
              data.uid is string &&
-             data.googleDriveFileId is string &&
              data.status in ['draft', 'submitted'] &&
              (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp) &&
-             (!('submittedAt' in data) || data.submittedAt is timestamp);
+             (!('submittedAt' in data) || data.submittedAt is timestamp) &&
+             (!('googleDriveFileId' in data) || data.googleDriveFileId == null || data.googleDriveFileId is string) &&
+             (!('fileUrl' in data) || data.fileUrl == null || data.fileUrl is string) &&
+             (!('textSubmission' in data) || data.textSubmission == null || data.textSubmission is string) &&
+             (!('grade' in data) || data.grade is number) &&
+             (!('feedback' in data) || data.feedback is string) &&
+             (!('staidentId' in data) || data.staidentId == null || data.staidentId is string) &&
+             (!('isSimulated' in data) || data.isSimulated is bool) &&
+             (!('simulationExplanation' in data) || data.simulationExplanation is string);
+    }
+
+    function isValidStaident(data) {
+      return data.keys().hasAll(['courseId', 'name', 'skillLevel', 'behaviorPattern', 'timestamp']) &&
+             data.courseId is string &&
+             data.name is string && data.name.size() > 0 &&
+             data.skillLevel in ['low', 'average', 'exceptional'] &&
+             data.behaviorPattern in ['diligent', 'procrastinator', 'struggling', 'random'] &&
+             (!('personality' in data) || data.personality is string) &&
+             (!('workHabit' in data) || data.workHabit is string) &&
+             (!('avatarSeed' in data) || data.avatarSeed is string) &&
+             (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp);
     }
 
     // Domain Validators
@@ -126,7 +165,10 @@ service cloud.firestore {
              isValidEmail(data.email) &&
              (!('displayName' in data) || data.displayName is string) &&
              (!('photoURL' in data) || data.photoURL == null || data.photoURL is string) &&
-             (!('role' in data) || data.role in ['student', 'admin']);
+             (!('role' in data) || data.role in ['student', 'teacher', 'admin']) &&
+             (!('schoolId' in data) || data.schoolId == null || data.schoolId is string) &&
+             (!('gradeLevel' in data) || data.gradeLevel is string) &&
+             (!('program' in data) || data.program is string);
     }
 
     function isValidCourse(data) {
@@ -138,7 +180,19 @@ service cloud.firestore {
              (!('section' in data) || data.section is string) &&
              (!('tag' in data) || data.tag is string) &&
              (!('color' in data) || data.color is string) &&
-             (!('image' in data) || data.image is string);
+             (!('image' in data) || data.image is string) &&
+             (!('schoolId' in data) || data.schoolId == null || data.schoolId is string);
+    }
+
+    function isValidSchool(data) {
+      return data.keys().hasAll(['name', 'uid', 'timestamp']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.uid is string &&
+             (data.timestamp is string ? isValidDateString(data.timestamp) : data.timestamp is timestamp) &&
+             (!('description' in data) || data.description is string) &&
+             (!('domain' in data) || data.domain is string) &&
+             (!('color' in data) || data.color is string) &&
+             (!('logoUrl' in data) || data.logoUrl is string);
     }
 
     function isValidEnrollment(data) {
@@ -215,37 +269,44 @@ service cloud.firestore {
 
     // Rules
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isStaff();
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'student' || isAdmin());
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+      allow update: if (isOwner(userId) || (isAdmin() && isSameSchool(resource.data.schoolId))) && isValidUser(request.resource.data) && (isAdmin() || request.resource.data.role == resource.data.role);
+    }
+
+    match /schools/{schoolId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidSchool(request.resource.data);
+      allow update: if isManager(schoolId) && isValidSchool(request.resource.data);
+      allow delete: if isAdmin() && (request.auth.uid == "shanesdih" || request.auth.token.email == "piercesnyder39@gmail.com");
     }
 
     match /courses/{courseId} {
       allow read: if isAuthenticated();
-      allow create: if isAdmin() && isValidCourse(request.resource.data);
-      allow update: if isAdmin() && isValidCourse(request.resource.data);
-      allow delete: if isAdmin();
+      allow create: if isStaff() && isValidCourse(request.resource.data) && isSameSchool(request.resource.data.schoolId);
+      allow update: if isStaff() && isValidCourse(request.resource.data) && isSameSchool(resource.data.schoolId);
+      allow delete: if isManager(resource.data.schoolId);
     }
 
     match /enrollments/{enrollmentId} {
-      allow read: if isOwner(resource.data.uid) || isAdmin();
-      allow create: if isRequestOwner() && isValidEnrollment(request.resource.data);
-      allow update: if isAdmin();
-      allow delete: if isOwner(resource.data.uid) || isAdmin();
+      allow read: if isOwner(resource.data.uid) || isStaff();
+      allow create: if (isRequestOwner() || isStaff()) && isValidEnrollment(request.resource.data);
+      allow update: if isStaff();
+      allow delete: if isOwner(resource.data.uid) || isStaff();
     }
 
     match /activities/{activityId} {
-      allow read: if isEnrolled(resource.data.courseId) || isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read: if isEnrolled(resource.data.courseId) || isStaff();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isStaff();
     }
 
     match /course_messages/{messageId} {
-      allow read: if isEnrolled(resource.data.courseId) || isAdmin();
+      allow read: if isEnrolled(resource.data.courseId) || isStaff();
       allow create: if isEnrolled(request.resource.data.courseId) && isRequestOwner() && isValidCourseMessage(request.resource.data);
       allow update: if false; // Messages are immutable
-      allow delete: if isDocOwner() || isAdmin();
+      allow delete: if isDocOwner() || isStaff();
     }
 
     match /reminders/{reminderId} {
@@ -277,24 +338,31 @@ service cloud.firestore {
     }
 
     match /resources/{resourceId} {
-      allow read: if isEnrolled(resource.data.courseId) || isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read: if isEnrolled(resource.data.courseId) || isStaff();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isStaff();
     }
 
     match /materials/{materialId} {
-      allow read: if (isEnrolled(resource.data.courseId) || isAdmin()) && (isAdmin() || resource.data.published == true);
-      allow create: if isAdmin() && isValidMaterial(request.resource.data);
-      allow update: if isAdmin() && isValidMaterial(request.resource.data);
-      allow delete: if isAdmin();
+      allow read: if (isEnrolled(resource.data.courseId) || isStaff()) && (isStaff() || resource.data.published == true);
+      allow create: if isStaff() && isValidMaterial(request.resource.data);
+      allow update: if isStaff() && isValidMaterial(request.resource.data);
+      allow delete: if isStaff();
     }
 
     match /submissions/{submissionId} {
-      allow read: if isDocOwner() || isAdmin();
-      allow create: if isRequestOwner() && isValidSubmission(request.resource.data);
-      allow update: if isDocOwner() && isValidSubmission(request.resource.data) && request.resource.data.uid == resource.data.uid;
-      allow delete: if isDocOwner() || isAdmin();
+      allow read: if isDocOwner() || isStaff();
+      allow create: if (isRequestOwner() || isStaff()) && isValidSubmission(request.resource.data);
+      allow update: if (isDocOwner() || isStaff()) && isValidSubmission(request.resource.data) && (isStaff() || request.resource.data.uid == resource.data.uid);
+      allow delete: if isDocOwner() || isStaff();
+    }
+
+    match /staidents/{staidentId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff() && isValidStaident(request.resource.data);
+      allow update: if isStaff() && isValidStaident(request.resource.data);
+      allow delete: if isStaff();
     }
   }
 }

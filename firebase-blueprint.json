@@ -9,9 +9,27 @@
         "displayName": { "type": "string" },
         "email": { "type": "string" },
         "photoURL": { "type": "string" },
-        "role": { "type": "string", "enum": ["student", "admin"] }
+        "role": { "type": "string", "enum": ["student", "teacher", "admin"] },
+        "schoolId": { "type": "string", "description": "ID of the school the user belongs to" },
+        "gradeLevel": { "type": "string" },
+        "program": { "type": "string" }
       },
       "required": ["uid", "email"]
+    },
+    "School": {
+      "title": "School",
+      "description": "An educational institution.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "domain": { "type": "string" },
+        "color": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "uid": { "type": "string", "description": "Creator UID" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "uid", "timestamp"]
     },
     "Course": {
       "title": "Course",
@@ -25,7 +43,8 @@
         "color": { "type": "string" },
         "image": { "type": "string" },
         "code": { "type": "string" },
-        "uid": { "type": "string" }
+        "uid": { "type": "string" },
+        "schoolId": { "type": "string", "description": "ID of the school this course belongs to" }
       },
       "required": ["title", "code"]
     },
@@ -154,6 +173,9 @@
       "properties": {
         "materialId": { "type": "string" },
         "uid": { "type": "string", "description": "Student UID" },
+        "staidentId": { "type": "string", "description": "ID of the Staident if simulated" },
+        "isSimulated": { "type": "boolean" },
+        "simulationExplanation": { "type": "string" },
         "googleDriveFileId": { "type": "string", "description": "ID of the student's copy in Google Drive" },
         "fileUrl": { "type": "string", "description": "URL of the uploaded file" },
         "textSubmission": { "type": "string", "description": "Text content of the submission" },
@@ -164,7 +186,23 @@
         "submittedAt": { "type": "string", "format": "date-time", "description": "When the assignment was submitted" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
-      "required": ["materialId", "uid", "googleDriveFileId", "status", "timestamp"]
+      "required": ["materialId", "uid", "status", "timestamp"]
+    },
+    "Staident": {
+      "title": "Staident",
+      "description": "An AI-powered practice student.",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string" },
+        "name": { "type": "string" },
+        "personality": { "type": "string" },
+        "skillLevel": { "type": "string", "enum": ["low", "average", "exceptional"] },
+        "behaviorPattern": { "type": "string", "enum": ["diligent", "procrastinator", "struggling", "random"] },
+        "workHabit": { "type": "string" },
+        "avatarSeed": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "name", "skillLevel", "behaviorPattern", "timestamp"]
     },
     "CourseMessage": {
       "title": "CourseMessage",
@@ -185,6 +223,10 @@
     "/users/{userId}": {
       "schema": "User",
       "description": "User profile documents"
+    },
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "School information"
     },
     "/courses/{courseId}": {
       "schema": "Course",
@@ -229,6 +271,10 @@
     "/submissions/{submissionId}": {
       "schema": "Submission",
       "description": "Assignment submissions"
+    },
+    "/staidents/{staidentId}": {
+      "schema": "Staident",
+      "description": "AI Practice Students"
     }
   }
 }

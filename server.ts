@@ -18,7 +18,10 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser(process.env.SESSION_SECRET || "zentelle-secret"));
 
-  const appUrl = (process.env.APP_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
+  let appUrl = (process.env.APP_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
+  if (!appUrl.startsWith("http")) {
+    appUrl = `https://${appUrl}`;
+  }
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${appUrl}/auth/google/callback`;
 
   console.log("OAuth Redirect URI configured as:", redirectUri);

@@ -291,8 +291,10 @@ export default function Materials({
   const [newMaterialColor, setNewMaterialColor] = useState(COLORS[0]);
   const [newMaterialLink, setNewMaterialLink] = useState('');
   const [newMaterialTemplateId, setNewMaterialTemplateId] = useState('');
+  const [newMaterialTemplateType, setNewMaterialTemplateType] = useState<'document' | 'presentation' | 'spreadsheet'>('document');
   const [newMaterialPoints, setNewMaterialPoints] = useState<number>(100);
   const [newMaterialDueDate, setNewMaterialDueDate] = useState('');
+  const [newMaterialPublished, setNewMaterialPublished] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [isGoogleAuth, setIsGoogleAuth] = useState(false);
@@ -374,13 +376,23 @@ export default function Materials({
     }
 
     // Fetch materials in the current folder/level
-    const q = query(
-      collection(db, 'materials'),
-      where('courseId', '==', courseId),
-      where('parentId', '==', folderId || null),
-      orderBy('order', 'asc'),
-      orderBy('timestamp', 'desc')
-    );
+    let q;
+    if (isAdmin) {
+      q = query(
+        collection(db, 'materials'),
+        where('courseId', '==', courseId),
+        where('parentId', '==', folderId || null),
+        orderBy('order', 'asc')
+      );
+    } else {
+      q = query(
+        collection(db, 'materials'),
+        where('courseId', '==', courseId),
+        where('parentId', '==', folderId || null),
+        where('published', '==', true),
+        orderBy('order', 'asc')
+      );
+    }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const materialsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Material));
@@ -456,7 +468,7 @@ export default function Materials({
       uid: auth.currentUser.uid,
       order: materials.length,
       timestamp: serverTimestamp(),
-      published: true,
+      published: newMaterialPublished,
     };
 
     if (newMaterialType === 'folder') {
@@ -465,6 +477,7 @@ export default function Materials({
       materialData.url = newMaterialLink;
     } else if (newMaterialType === 'assignment') {
       materialData.googleDriveTemplateId = newMaterialTemplateId || null;
+      materialData.googleDriveTemplateType = newMaterialTemplateId ? newMaterialTemplateType : null;
       materialData.points = newMaterialPoints;
       materialData.dueDate = newMaterialDueDate || null;
     }
@@ -473,8 +486,6 @@ export default function Materials({
       if (isEditing && editingMaterialId) {
         await updateDoc(doc(db, 'materials', editingMaterialId), materialData);
       } else {
-        materialData.timestamp = serverTimestamp();
-        materialData.published = true;
         await addDoc(collection(db, 'materials'), materialData);
       }
       setShowAddModal(false);
@@ -493,8 +504,10 @@ export default function Materials({
     setNewMaterialColor(material.color || COLORS[0]);
     setNewMaterialLink(material.url || '');
     setNewMaterialTemplateId(material.googleDriveTemplateId || '');
+    setNewMaterialTemplateType(material.googleDriveTemplateType || 'document');
     setNewMaterialPoints(material.points || 100);
     setNewMaterialDueDate(material.dueDate || '');
+    setNewMaterialPublished(material.published ?? true);
     setShowAddModal(true);
   };
 
@@ -512,8 +525,10 @@ export default function Materials({
     setNewMaterialColor(COLORS[0]);
     setNewMaterialLink('');
     setNewMaterialTemplateId('');
+    setNewMaterialTemplateType('document');
     setNewMaterialPoints(100);
     setNewMaterialDueDate('');
+    setNewMaterialPublished(true);
     setIsEditing(false);
     setEditingMaterialId(null);
   };
@@ -940,8 +955,29 @@ export default function Materials({
                             Browse
                           </button>
                         </div>
+                        <div className="flex gap-2 p-1 bg-white/50 rounded-xl border border-green-100">
+                          {[
+                            { id: 'document', label: 'Google Doc (DOCX)', icon: FileText },
+                            { id: 'presentation', label: 'Google Slides (PPTX)', icon: Eye },
+                            { id: 'spreadsheet', label: 'Google Sheets (XLSX)', icon: ListIcon }
+                          ].map((type) => (
+                            <button
+                              key={type.id}
+                              type="button"
+                              onClick={() => setNewMaterialTemplateType(type.id as any)}
+                              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                                newMaterialTemplateType === type.id 
+                                  ? 'bg-green-600 text-white shadow-sm' 
+                                  : 'text-green-700 hover:bg-green-100/50'
+                              }`}
+                            >
+                              <type.icon className="w-3 h-3" />
+                              {type.label}
+                            </button>
+                          ))}
+                        </div>
                         <p className="text-[10px] text-green-600">
-                          Tip: Open your Google Doc, the ID is the long string between /d/ and /edit in the URL.
+                          Tip: Open your file, the ID is the long string between /d/ and /edit in the URL.
                         </p>
                       </div>
                     )}
@@ -949,6 +985,25 @@ export default function Materials({
                 </div>
               )}
             </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <div className={`p-2 rounded-lg ${newMaterialPublished ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-500'}`}>
+                    {newMaterialPublished ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-gray-900">Publish Material</p>
+                    <p className="text-xs text-gray-500">Visible to students immediately</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewMaterialPublished(!newMaterialPublished)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${newMaterialPublished ? 'bg-[#004275]' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${newMaterialPublished ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+              </div>
 
               <div className="flex gap-4 pt-4">
                 <button 

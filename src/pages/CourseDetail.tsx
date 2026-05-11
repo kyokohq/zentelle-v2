@@ -13,10 +13,12 @@ import {
   limit
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Course, Activity, Resource, OperationType, Enrollment } from '../types';
+import { Course, Activity, Resource, OperationType, Enrollment, Staident } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import Materials from './Materials';
 import Gradebook from '../components/Gradebook';
+import { StaidentDashboard } from '../components/StaidentDashboard';
+import { EnrollmentManager } from '../components/EnrollmentManager';
 import { 
   Megaphone, 
   FileText, 
@@ -33,7 +35,8 @@ import {
   X,
   FolderOpen,
   ChevronRight,
-  CheckCircle2
+  CheckCircle2,
+  Cpu
 } from 'lucide-react';
 
 export function CourseDetail({ userRole }: { userRole?: string }) {
@@ -46,6 +49,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
+  const [staidents, setStaidents] = useState<Staident[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -112,10 +116,20 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
       setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Listen for staidents
+    const qStaidents = query(
+      collection(db, 'staidents'),
+      where('courseId', '==', courseId)
+    );
+    const unsubStaidents = onSnapshot(qStaidents, (snapshot) => {
+      setStaidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Staident)));
+    });
+
     return () => {
       unsubActivities();
       unsubResources();
       unsubMessages();
+      unsubStaidents();
     };
   }, [courseId, navigate]);
 
@@ -212,6 +226,22 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
           icon={<CheckCircle2 className="w-4 h-4" />} 
           label="Grades" 
         />
+        {(userRole === 'admin' || userRole === 'teacher') && (
+          <TabButton 
+            active={activeTab === 'students'} 
+            onClick={() => navigate(`/courses/${courseId}/students`)} 
+            icon={<User className="w-4 h-4" />} 
+            label="Students" 
+          />
+        )}
+        {userRole === 'admin' && (
+          <TabButton 
+            active={activeTab === 'staidents'} 
+            onClick={() => navigate(`/courses/${courseId}/staidents`)} 
+            icon={<Cpu className="w-4 h-4" />} 
+            label="Staidents" 
+          />
+        )}
       </div>
 
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm min-h-[500px] overflow-hidden">
@@ -406,6 +436,30 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
               className="p-8"
             >
               <Gradebook courseId={courseId!} isAdmin={userRole === 'admin'} />
+            </motion.div>
+          )}
+
+          {activeTab === 'students' && (userRole === 'admin' || userRole === 'teacher') && (
+            <motion.div 
+              key="students"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="p-8"
+            >
+              <EnrollmentManager courseId={courseId!} schoolId={course.schoolId} />
+            </motion.div>
+          )}
+
+          {activeTab === 'staidents' && userRole === 'admin' && (
+            <motion.div 
+              key="staidents"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="p-8"
+            >
+              <StaidentDashboard courseId={courseId!} staidents={staidents} />
             </motion.div>
           )}
         </AnimatePresence>

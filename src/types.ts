@@ -3,7 +3,21 @@ export interface UserProfile {
   displayName: string | null;
   email: string | null;
   photoURL: string | null;
-  role: 'student' | 'admin';
+  role: 'student' | 'teacher' | 'admin';
+  schoolId?: string | null;
+  gradeLevel?: string;
+  program?: string;
+}
+
+export interface School {
+  id: string;
+  name: string;
+  description: string;
+  domain?: string;
+  color: string;
+  logoUrl?: string;
+  uid: string;
+  timestamp: any;
 }
 
 export interface Course {
@@ -16,6 +30,7 @@ export interface Course {
   image: string;
   grade: string;
   code: string; // Added course code for joining
+  schoolId?: string | null;
 }
 
 export interface Enrollment {
@@ -104,6 +119,7 @@ export interface Material {
   color?: string;
   googleDriveFileId?: string;
   googleDriveTemplateId?: string;
+  googleDriveTemplateType?: 'document' | 'presentation' | 'spreadsheet';
   url?: string;
   points?: number;
   dueDate?: any;
@@ -117,6 +133,9 @@ export interface Submission {
   id: string;
   materialId: string;
   uid: string;
+  staidentId?: string; // ID if submitted by a Staident
+  isSimulated?: boolean;
+  simulationExplanation?: string;
   googleDriveFileId?: string;
   fileUrl?: string;
   textSubmission?: string;
@@ -125,6 +144,18 @@ export interface Submission {
   feedback?: string;
   studentName?: string;
   submittedAt?: any;
+  timestamp: any;
+}
+
+export interface Staident {
+  id: string;
+  courseId: string;
+  name: string;
+  personality: string;
+  skillLevel: 'low' | 'average' | 'exceptional';
+  behaviorPattern: 'diligent' | 'procrastinator' | 'struggling' | 'random';
+  workHabit: string;
+  avatarSeed: string;
   timestamp: any;
 }
 

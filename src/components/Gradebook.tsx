@@ -78,7 +78,21 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
           studentProfiles.push({ id: userDoc.docs[0].id, ...userDoc.docs[0].data() } as any);
         }
       }
-      setStudents(studentProfiles);
+
+      // Fetch Staidents for this course
+      const staidentsSnap = await getDocs(query(collection(db, 'staidents'), where('courseId', '==', courseId)));
+      const staidentProfiles = staidentsSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          uid: `staident_${doc.id}`,
+          displayName: data.name,
+          email: 'AI Practice Student',
+          role: 'student',
+          photoURL: null
+        } as any;
+      });
+
+      setStudents([...studentProfiles, ...staidentProfiles]);
     });
 
     // Fetch assignments
@@ -366,6 +380,24 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
                     className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all"
                   >
                     <ExternalLink className="w-4 h-4" /> Open
+                  </a>
+                </div>
+              ) : viewingSubmission.fileUrl ? (
+                <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-4">
+                  <div className="p-3 bg-blue-600 rounded-xl">
+                    <Download className="w-8 h-8 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-blue-900">{viewingSubmission.textSubmission || 'Uploaded File'}</h4>
+                    <p className="text-sm text-blue-700">The student uploaded a file.</p>
+                  </div>
+                  <a 
+                    href={viewingSubmission.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Download/View
                   </a>
                 </div>
               ) : (

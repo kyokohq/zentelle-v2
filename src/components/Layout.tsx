@@ -11,19 +11,27 @@ import {
   Zap,
   File,
   Users,
-  Plus
+  Plus,
+  Shield
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import { signOut, User as FirebaseUser } from 'firebase/auth';
 
+import { 
+  Course, 
+  School
+} from '../types';
+
 interface LayoutProps {
   user: FirebaseUser;
+  userRole?: 'student' | 'teacher' | 'admin';
+  school?: School | null;
   children: React.ReactNode;
   onAddTask: () => void;
 }
 
-export function Layout({ user, children, onAddTask }: LayoutProps) {
+export function Layout({ user, userRole, school, children, onAddTask }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -94,14 +102,21 @@ export function Layout({ user, children, onAddTask }: LayoutProps) {
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 h-screen w-64 pt-20 bg-white border-r border-gray-200 z-40">
         <div className="px-8 mb-8 mt-4">
-          <h2 className="text-[#004275] font-bold text-lg leading-tight font-headline">Zentelle Dashboard</h2>
-          <p className="text-gray-500 text-xs font-medium opacity-70">Academic Year 2024</p>
+          <h2 className="text-[#004275] font-bold text-lg leading-tight font-headline">
+            {school?.name || 'Zentelle Dashboard'}
+          </h2>
+          <p className="text-gray-500 text-xs font-medium opacity-70">
+            {school?.domain || 'Academic Year 2024'}
+          </p>
         </div>
         <nav className="flex flex-col gap-1 pr-4">
           <SidebarLink to="/" icon={<Megaphone className="w-5 h-5" />} label="Updates" active={location.pathname === '/'} />
           <SidebarLink to="/calendar" icon={<Calendar className="w-5 h-5" />} label="Calendar" active={location.pathname === '/calendar'} />
           <SidebarLink to="/grades" icon={<Star className="w-5 h-5" />} label="Grades" active={location.pathname === '/grades'} />
           <SidebarLink to="/attendance" icon={<ClipboardCheck className="w-5 h-5" />} label="Attendance" active={location.pathname === '/attendance'} />
+          {userRole === 'admin' && (
+            <SidebarLink to="/admin" icon={<Shield className="w-5 h-5" />} label="Admin" active={location.pathname === '/admin'} />
+          )}
         </nav>
 
         {/* Quick Access in Sidebar for Mobile/Small Screens */}
@@ -138,7 +153,7 @@ function NavLink({ to, children, active }: { to: string, children: React.ReactNo
     <Link 
       to={to} 
       className={`relative px-4 py-2 font-bold transition-all duration-200 rounded-lg ${
-        active ? 'text-white bg-white/10' : 'text-blue-100/80 hover:text-white hover:bg-white/10'
+        active ? 'text-white bg-white/15' : 'text-blue-100 hover:text-white hover:bg-white/10'
       }`}
     >
       {children}

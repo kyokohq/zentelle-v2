@@ -36,7 +36,8 @@ import {
   serverTimestamp,
   setDoc
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Material, Submission } from '../types';
 
@@ -52,6 +53,8 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
   const [isGoogleAuth, setIsGoogleAuth] = useState(false);
   const [textSubmission, setTextSubmission] = useState('');
   const [isTextMode, setIsTextMode] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const isAdmin = userRole === 'admin';
 
@@ -103,7 +106,12 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
       const docRef = doc(db, 'materials', assignmentId);
       const snap = await getDoc(docRef);
       if (snap.exists()) {
-        setAssignment({ id: snap.id, ...snap.data() } as Material);
+        const data = { id: snap.id, ...snap.data() } as Material;
+        if (!isAdmin && !data.published) {
+          setError("This assignment is currently unpublished and hidden from students.");
+        } else {
+          setAssignment(data);
+        }
       } else {
         setError("Assignment not found");
       }
@@ -213,13 +221,24 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
     
     setSubmitting(true);
     try {
-      const submissionData = {
+      let fileUrl = submission?.fileUrl || '';
+      let fileName = submission?.textSubmission || ''; // Using textSubmission as name if file
+
+      if (!isTextMode && selectedFile) {
+        const fileRef = ref(storage, `submissions/${assignment.id}/${auth.currentUser.uid}/${selectedFile.name}`);
+        await uploadBytes(fileRef, selectedFile);
+        fileUrl = await getDownloadURL(fileRef);
+        fileName = selectedFile.name;
+      }
+
+      const submissionData: any = {
         materialId: assignment.id,
         courseId: courseId,
         uid: auth.currentUser.uid,
         studentName: auth.currentUser.displayName || 'Student',
         studentEmail: auth.currentUser.email || '',
-        textSubmission: isTextMode ? textSubmission : '',
+        textSubmission: isTextMode ? textSubmission : fileName,
+        fileUrl: isTextMode ? null : fileUrl,
         status: 'submitted',
         submittedAt: serverTimestamp(),
         timestamp: serverTimestamp()
@@ -232,10 +251,29 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
       }
       
       setTextSubmission('');
+      setSelectedFile(null);
     } catch (err: any) {
       setError(err.message || "Failed to submit assignment.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const getDriveUrl = (fileId: string) => {
+    const type = assignment?.googleDriveTemplateType || 'document';
+    switch (type) {
+      case 'presentation': return `https://docs.google.com/presentation/d/${fileId}/edit`;
+      case 'spreadsheet': return `https://docs.google.com/spreadsheets/d/${fileId}/edit`;
+      default: return `https://docs.google.com/document/d/${fileId}/edit`;
+    }
+  };
+
+  const getDriveLabel = () => {
+    const type = assignment?.googleDriveTemplateType || 'document';
+    switch (type) {
+      case 'presentation': return 'Google Slides';
+      case 'spreadsheet': return 'Google Sheets';
+      default: return 'Google Doc';
     }
   };
 
@@ -368,10 +406,10 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-blue-900 truncate">{assignment.title} - {auth.currentUser?.displayName}</h4>
-                      <p className="text-sm text-blue-700">Google Doc • Last synced {new Date().toLocaleTimeString()}</p>
+                      <p className="text-sm text-blue-700">{getDriveLabel()} • Last synced {new Date().toLocaleTimeString()}</p>
                     </div>
                     <a 
-                      href={`https://docs.google.com/document/d/${submission.googleDriveFileId}/edit`}
+                      href={getDriveUrl(submission.googleDriveFileId!)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-3 hover:bg-blue-100 rounded-xl transition-colors text-blue-600"
@@ -382,7 +420,7 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
 
                   <div className="flex gap-4">
                     <a 
-                      href={`https://docs.google.com/document/d/${submission.googleDriveFileId}/edit`}
+                      href={getDriveUrl(submission.googleDriveFileId!)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 flex items-center justify-center gap-2 bg-white border-2 border-[#004275] text-[#004275] py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all"
@@ -435,9 +473,29 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
                 <div className="space-y-4">
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
                     <p className="text-sm font-bold text-gray-500 mb-2">Your Submission:</p>
-                    <p className="text-gray-700 whitespace-pre-wrap">
-                      {submission.textSubmission || 'No text content provided.'}
-                    </p>
+                    {submission.fileUrl ? (
+                      <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Download className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-900 truncate">{submission.textSubmission || 'Submitted File'}</p>
+                          <p className="text-xs text-gray-500">Uploaded File</p>
+                        </div>
+                        <a 
+                          href={submission.fileUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-blue-600"
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="text-gray-700 whitespace-pre-wrap">
+                        {submission.textSubmission || 'No text content provided.'}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center justify-center gap-2 text-gray-500 text-sm italic">
                     <Lock className="w-4 h-4" /> Submitted on {submission.submittedAt?.toDate ? new Date(submission.submittedAt.toDate()).toLocaleString() : 'Recently'}
@@ -471,25 +529,32 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
                       required
                     />
                   ) : (
-                    <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                      <Upload className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Upload your work</h3>
+                    <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 relative group">
+                      <input 
+                        type="file" 
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        id="file-upload"
+                      />
+                      <Upload className="w-12 h-12 text-gray-300 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">
+                        {selectedFile ? selectedFile.name : 'Upload your work'}
+                      </h3>
                       <p className="text-gray-500 max-w-xs mx-auto mb-6">
-                        Select a file from your computer to submit for this assignment.
+                        {selectedFile ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB` : 'Select a file from your computer to submit for this assignment.'}
                       </p>
-                      <button 
-                        type="button"
-                        className="bg-white border-2 border-gray-200 text-gray-600 px-6 py-3 rounded-xl font-bold hover:bg-gray-100 transition-all"
+                      <label 
+                        htmlFor="file-upload"
+                        className="bg-white border-2 border-gray-200 text-gray-600 px-6 py-3 rounded-xl font-bold hover:bg-gray-100 transition-all cursor-pointer inline-block"
                       >
-                        Choose File
-                      </button>
-                      <p className="mt-4 text-xs text-gray-400 italic">(File upload simulation - text mode recommended for now)</p>
+                        {selectedFile ? 'Change File' : 'Choose File'}
+                      </label>
                     </div>
                   )}
 
                   <button 
                     type="submit"
-                    disabled={submitting || (isTextMode && !textSubmission.trim())}
+                    disabled={submitting || (isTextMode ? !textSubmission.trim() : !selectedFile)}
                     className="w-full flex items-center justify-center gap-2 bg-[#004275] text-white py-4 rounded-2xl font-bold hover:bg-[#005a9c] transition-all shadow-lg disabled:opacity-50"
                   >
                     {submitting ? (

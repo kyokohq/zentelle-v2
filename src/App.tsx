@@ -34,6 +34,7 @@ import {
   Task, 
   Group, 
   Resource,
+  School,
   OperationType, 
   FirestoreErrorInfo,
   UserProfile
@@ -49,6 +50,8 @@ import { Grades } from './pages/Grades';
 import { Attendance } from './pages/Attendance';
 import { Groups } from './pages/Groups';
 import { Resources } from './pages/Resources';
+import { Admin } from './pages/Admin';
+import { Onboarding } from './pages/Onboarding';
 import Materials from './pages/Materials';
 import AssignmentDetail from './pages/AssignmentDetail';
 import { Loader2, LogIn, X } from 'lucide-react';
@@ -90,6 +93,8 @@ export default function App() {
 function ZentelleApp() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [userSchool, setUserSchool] = useState<School | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -132,7 +137,7 @@ function ZentelleApp() {
       const userRef = doc(db, 'users', uid);
       try {
         const userSnap = await getDoc(userRef);
-        const isAdminUser = uid === 'shanesdih' || user.email === 'piercesnyder39@gmail.com';
+          const isAdminUser = uid === 'shanesdih' || user.email === 'piercesnyder39@gmail.com';
         
         if (!userSnap.exists()) {
           const newProfile: UserProfile = {
@@ -140,16 +145,26 @@ function ZentelleApp() {
             displayName: user.displayName || 'Student',
             email: user.email || '',
             photoURL: user.photoURL || null,
-            role: isAdminUser ? 'admin' : 'student'
+            role: isAdminUser ? 'admin' : 'student',
+            schoolId: null
           };
           await setDoc(userRef, newProfile);
           setUserProfile(newProfile);
           await seedInitialData(uid);
         } else {
           const profile = userSnap.data() as UserProfile;
-          // If user should be admin but isn't, update them
-          if (isAdminUser && profile.role !== 'admin') {
-            const updatedProfile = { ...profile, role: 'admin' as const };
+          // Sync relevant fields if they changed in Firebase Auth
+          const needsUpdate = (isAdminUser && profile.role !== 'admin') || 
+                             (profile.displayName !== user.displayName && user.displayName) ||
+                             (profile.photoURL !== user.photoURL && user.photoURL);
+          
+          if (needsUpdate) {
+            const updatedProfile = { 
+              ...profile, 
+              role: isAdminUser ? 'admin' as const : profile.role,
+              displayName: user.displayName || profile.displayName,
+              photoURL: user.photoURL || profile.photoURL
+            };
             await setDoc(userRef, updatedProfile);
             setUserProfile(updatedProfile);
           } else {
@@ -212,6 +227,10 @@ function ZentelleApp() {
       setLoading(false);
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'resources'));
 
+    const unsubAllSchools = onSnapshot(collection(db, 'schools'), (snapshot) => {
+      setSchools(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as School)));
+    });
+
     return () => {
       unsubEnrollments();
       unsubActivities();
@@ -220,8 +239,24 @@ function ZentelleApp() {
       unsubTasks();
       unsubGroups();
       unsubResources();
+      unsubAllSchools();
     };
   }, [isAuthReady, user]);
+
+  useEffect(() => {
+    if (userProfile?.schoolId) {
+      const unsub = onSnapshot(doc(db, 'schools', userProfile.schoolId), (snap) => {
+        if (snap.exists()) {
+          setUserSchool({ id: snap.id, ...snap.data() } as School);
+        } else {
+          setUserSchool(null);
+        }
+      });
+      return () => unsub();
+    } else {
+      setUserSchool(null);
+    }
+  }, [userProfile?.schoolId]);
 
   const seedInitialData = async (uid: string) => {
     const initialCourses = [
@@ -452,8 +487,19 @@ function ZentelleApp() {
     );
   }
 
+  if (isAuthReady && user && userProfile && !userProfile.schoolId) {
+    return <Onboarding userProfile={userProfile} onComplete={(schoolId) => {
+      setUserProfile({ ...userProfile, schoolId, role: 'admin' });
+    }} />;
+  }
+
   return (
-    <Layout user={user} onAddTask={() => setShowAddTask(true)}>
+    <Layout 
+      user={user} 
+      userRole={userProfile?.role} 
+      school={userSchool}
+      onAddTask={() => setShowAddTask(true)}
+    >
       <Routes>
         <Route path="/" element={
           <Dashboard 
@@ -482,6 +528,9 @@ function ZentelleApp() {
         <Route path="/attendance" element={<Attendance courses={courses} />} />
         <Route path="/groups" element={<Groups groups={groups} onCreateGroup={() => setShowCreateGroup(true)} />} />
         <Route path="/resources" element={<Resources resources={resources} onUploadResource={() => setShowUploadResource(true)} />} />
+        {userProfile?.role === 'admin' && (
+          <Route path="/admin" element={<Admin currentUserId={user.uid} currentSchoolId={userProfile?.schoolId} userEmail={user.email} />} />
+        )}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
