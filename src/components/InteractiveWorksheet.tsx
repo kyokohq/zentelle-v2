@@ -282,7 +282,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           zoom *= 0.999 ** delta;
           if (zoom > 3) zoom = 3;
           if (zoom < 0.1) zoom = 0.1;
-          canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+          canvas.zoomToPoint(new fabric.Point(opt.e.offsetX, opt.e.offsetY), zoom);
           setZoom(zoom);
         } else {
           // Pan Vertical
@@ -316,21 +316,21 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       });
 
       canvas.on('mouse:down', function(opt) {
-        var evt = opt.e;
+        var evt = opt.e as MouseEvent;
         if (evt.altKey === true || activeTool === 'select' && !opt.target) {
-          this.isDragging = true;
+          (this as any).isDragging = true;
           this.selection = false;
-          this.lastPosX = evt.clientX;
-          this.lastPosY = evt.clientY;
+          (this as any).lastPosX = evt.clientX;
+          (this as any).lastPosY = evt.clientY;
         }
       });
 
       canvas.on('mouse:move', function(opt) {
-        if (this.isDragging) {
-          var e = opt.e;
+        if ((this as any).isDragging) {
+          var e = opt.e as MouseEvent;
           var vpt = this.viewportTransform!;
-          vpt[4] += e.clientX - this.lastPosX;
-          vpt[5] += e.clientY - this.lastPosY;
+          vpt[4] += e.clientX - (this as any).lastPosX;
+          vpt[5] += e.clientY - (this as any).lastPosY;
           
           // Constrain horizontal panning to keep some of the PDF visible
           const bgWidth = (canvas.backgroundImage as fabric.Image)?.width || 0;
@@ -341,14 +341,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           if (vpt[4] < minLeft) vpt[4] = minLeft;
 
           this.requestRenderAll();
-          this.lastPosX = e.clientX;
-          this.lastPosY = e.clientY;
+          (this as any).lastPosX = e.clientX;
+          (this as any).lastPosY = e.clientY;
         }
       });
 
       canvas.on('mouse:up', function(opt) {
         this.setViewportTransform(this.viewportTransform!);
-        this.isDragging = false;
+        (this as any).isDragging = false;
         this.selection = true;
       });
 
@@ -435,6 +435,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     
     let left = center.x - 20;
     let top = center.y - 20;
+    let lastType: HotspotData['type'] = 'info';
 
     if (hotspots.length > 0) {
       // Find the last hotspot (max top)
@@ -449,14 +450,21 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       // Otherwise use viewport center
       left = lastHotspot.left!;
       top = lastHotspot.top! + (lastHotspot.height! * lastHotspot.scaleY!) + 25;
+      lastType = (lastHotspot as any).hotspotData?.type || 'info';
     }
+
+    // Determine color based on last type
+    let fill = 'rgba(0, 66, 117, 0.2)';
+    if (lastType === 'correct') fill = 'rgba(34, 197, 94, 0.2)';
+    if (lastType === 'incorrect') fill = 'rgba(239, 68, 68, 0.2)';
+    if (lastType === 'text-response') fill = 'rgba(249, 115, 22, 0.2)';
 
     const hotspot = new fabric.Rect({
       left,
       top,
       width: 40,
       height: 40,
-      fill: 'rgba(0, 66, 117, 0.2)',
+      fill,
       stroke: '#004275',
       strokeWidth: 2,
       rx: 8,
@@ -468,14 +476,44 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     
     (hotspot as any).isHotspot = true;
     (hotspot as any).hotspotData = {
-      type: 'info',
-      content: 'New Information Point',
+      type: lastType,
+      content: lastType === 'info' ? 'New Information Point' : 'New Interaction',
       id: Math.random().toString(36).substr(2, 9)
     };
     
     fabricCanvas.add(hotspot);
     fabricCanvas.setActiveObject(hotspot);
     setSelectedHotspot(hotspot);
+    fabricCanvas.requestRenderAll();
+  };
+
+  const duplicateSelection = async () => {
+    if (!fabricCanvas) return;
+    const activeObject = fabricCanvas.getActiveObject();
+    if (!activeObject) return;
+
+    // Support for metadata cloning
+    const extraFields = ['isHotspot', 'hotspotData', 'isTemplate'];
+    
+    const cloned = await activeObject.clone(extraFields);
+    fabricCanvas.discardActiveObject();
+    
+    cloned.set({
+      left: cloned.left! + 24,
+      top: cloned.top! + 24,
+      evented: true,
+    });
+
+    if ((cloned as any).isHotspot && (cloned as any).hotspotData) {
+      // Give it a new ID
+      (cloned as any).hotspotData = { 
+        ...(cloned as any).hotspotData, 
+        id: Math.random().toString(36).substr(2, 9) 
+      };
+    }
+    
+    fabricCanvas.add(cloned);
+    fabricCanvas.setActiveObject(cloned);
     fabricCanvas.requestRenderAll();
   };
 
@@ -490,8 +528,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         return;
       }
 
-      if (e.key.toLowerCase() === 'h') {
+      const key = e.key.toLowerCase();
+      if (key === 'h') {
         quickAddHotspot();
+      }
+
+      if ((e.ctrlKey || e.metaKey) && key === 'd') {
+        e.preventDefault();
+        duplicateSelection();
       }
     };
 
