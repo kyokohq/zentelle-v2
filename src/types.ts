@@ -149,7 +149,7 @@ export interface Material {
 export interface QuizQuestion {
   id: string;
   quizId: string;
-  type: 'multiple-choice' | 'checkbox' | 'matching' | 'image-hotspot' | 'short-answer';
+  type: 'multiple-choice' | 'checkbox' | 'matching' | 'image-hotspot' | 'short-answer' | 'true-false' | 'essay' | 'fill-in-the-blank' | 'dropdown' | 'file-upload';
   question: string;
   imageUrl?: string;
   options?: string[];
@@ -165,6 +165,10 @@ export interface QuizQuestion {
     isCorrect: boolean;
     label?: string;
   }[];
+  dropdownOptions?: string[];
+  blankCorrectAnswers?: string[];
+  keywords?: string[];
+  points?: number;
   order: number;
 }
 

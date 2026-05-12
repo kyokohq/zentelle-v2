@@ -10,6 +10,7 @@ import {
   RotateCcw,
   MousePointer2,
   Send,
+  Upload,
   Loader2,
   CheckSquare
 } from 'lucide-react';
@@ -124,16 +125,36 @@ export function QuizPlayer({ quizId, onClose }: QuizPlayerProps) {
           const studentMatches = studentAnswer as Record<string, string> || {};
           const correctPairs = q.matchingPairs || {};
           const totalPairs = Object.keys(correctPairs).length;
-          let pairCorrect = 0;
-          Object.entries(correctPairs).forEach(([k, v]) => {
-            if (studentMatches[k] === v) pairCorrect++;
-          });
-          if (pairCorrect === totalPairs) correctCount++;
-        } else if (q.type === 'multiple-choice' || q.type === 'short-answer') {
+          if (totalPairs === 0) {
+              correctCount++; 
+          } else {
+              let pairCorrect = 0;
+              Object.entries(correctPairs).forEach(([k, v]) => {
+                if (studentMatches[k] === v) pairCorrect++;
+              });
+              if (pairCorrect === totalPairs) correctCount++;
+          }
+        } else if (q.type === 'fill-in-the-blank') {
+          const studentAnswers = studentAnswer as string[] || [];
+          const correctAnswers = q.blankCorrectAnswers || [];
+          const isCorrect = correctAnswers.length > 0 && correctAnswers.every((ans, i) => 
+            studentAnswers[i]?.toLowerCase().trim() === ans.toLowerCase().trim()
+          );
+          if (isCorrect) correctCount++;
+        } else if (q.type === 'short-answer') {
+          const keywords = q.keywords || [];
+          const answer = (studentAnswer as string || '').toLowerCase();
+          const hasAllKeywords = keywords.length > 0 && keywords.every(kw => 
+            answer.includes(kw.toLowerCase().trim())
+          );
+          // If no keywords defined, treat as manual grading (not auto-correct)
+          if (keywords.length > 0 && hasAllKeywords) correctCount++;
+        } else if (q.type === 'multiple-choice' || q.type === 'true-false' || q.type === 'dropdown') {
           if (studentAnswer?.toLowerCase().trim() === q.correctAnswer?.toLowerCase().trim()) {
             correctCount++;
           }
         }
+        // Essay and File Upload are skipped for auto-grading (count as 0 for now)
       });
 
       const finalScore = Math.round((correctCount / questions.length) * 100);
@@ -335,45 +356,128 @@ export function QuizPlayer({ quizId, onClose }: QuizPlayerProps) {
                     />
                   )}
 
-                  {currentQuestion?.type === 'image-hotspot' && (
-                    <div className="relative rounded-[40px] overflow-hidden bg-gray-900 aspect-video group shadow-2xl border-4 border-white">
-                      <img 
-                        src={currentQuestion.imageUrl} 
-                        className="w-full h-full object-contain pointer-events-none"
-                      />
-                      <div className="absolute inset-0 cursor-crosshair">
-                        {currentQuestion.hotspots?.map((h, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleHotspotClick(h)}
-                            className={`absolute border-2 border-dashed transition-all active:scale-95 ${
-                              answers[currentQuestion.id] === h.label ? 'border-white bg-white/20 scale-110' : 'border-transparent group-hover:border-white/10'
-                            }`}
-                            style={{ 
-                              left: `${h.x}%`, 
-                              top: `${h.y}%`, 
-                              width: `${h.width}%`, 
-                              height: `${h.height}%`,
-                              transform: 'translate(-50%, -50%)'
-                            }}
-                          >
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                              <MousePointer2 className="w-6 h-6 text-white drop-shadow-lg" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      
-                      {!answers[currentQuestion.id] && (
-                        <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
-                           <div className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-full text-white text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                             <AlertCircle className="w-4 h-4" />
-                             Click the correct area on the image
-                           </div>
-                        </div>
-                      )}
+          {currentQuestion?.type === 'image-hotspot' && (
+            <div className="relative rounded-[40px] overflow-hidden bg-gray-900 aspect-video group shadow-2xl border-4 border-white">
+              <img 
+                src={currentQuestion.imageUrl} 
+                className="w-full h-full object-contain pointer-events-none"
+              />
+              <div className="absolute inset-0 cursor-crosshair">
+                {currentQuestion.hotspots?.map((h, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleHotspotClick(h)}
+                    className={`absolute border-2 border-dashed transition-all active:scale-95 ${
+                      answers[currentQuestion.id] === h.label ? 'border-white bg-white/20 scale-110' : 'border-transparent group-hover:border-white/10'
+                    }`}
+                    style={{ 
+                      left: `${h.x}%`, 
+                      top: `${h.y}%`, 
+                      width: `${h.width}%`, 
+                      height: `${h.height}%`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <MousePointer2 className="w-6 h-6 text-white drop-shadow-lg" />
                     </div>
-                  )}
+                  </button>
+                ))}
+              </div>
+              
+              {!answers[currentQuestion.id] && (
+                <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
+                    <div className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-full text-white text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Click the correct area on the image
+                    </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentQuestion?.type === 'true-false' && (
+            <div className="flex flex-col gap-6 max-w-md mx-auto">
+              {['True', 'False'].map((val) => (
+                <button
+                  key={val}
+                  onClick={() => handleAnswerChange(val)}
+                  className={`w-full p-8 rounded-3xl border-4 text-2xl font-black transition-all ${
+                    answers[currentQuestion.id] === val 
+                      ? 'border-[#004275] bg-[#004275] text-white shadow-xl scale-105' 
+                      : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {currentQuestion?.type === 'dropdown' && (
+            <div className="max-w-md mx-auto">
+              <select
+                value={answers[currentQuestion.id] || ''}
+                onChange={(e) => handleAnswerChange(e.target.value)}
+                className="w-full p-8 rounded-[32px] border-4 border-gray-100 bg-white text-2xl font-black text-[#004275] outline-none focus:border-[#004275] transition-all"
+              >
+                <option value="">Select an answer...</option>
+                {currentQuestion.dropdownOptions?.map((opt, i) => (
+                  <option key={i} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {currentQuestion?.type === 'fill-in-the-blank' && (
+            <div className="space-y-6">
+              <p className="text-gray-500 mb-8 font-medium">Fill in the blanks (indicated by underscores in the text above).</p>
+              {(currentQuestion.blankCorrectAnswers || []).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-[#004275] text-white flex items-center justify-center rounded-2xl font-black">{i + 1}</div>
+                  <input 
+                    type="text"
+                    value={(answers[currentQuestion.id] || [])[i] || ''}
+                    onChange={(e) => {
+                      const current = answers[currentQuestion.id] || [];
+                      const next = [...current];
+                      next[i] = e.target.value;
+                      handleAnswerChange(next);
+                    }}
+                    placeholder={`Answer for blank ${i + 1}`}
+                    className="flex-1 bg-gray-50 border-2 border-gray-100 rounded-2xl px-6 py-4 text-xl font-bold focus:border-[#004275] outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {currentQuestion?.type === 'essay' && (
+            <textarea 
+              value={answers[currentQuestion.id] || ''}
+              onChange={(e) => handleAnswerChange(e.target.value)}
+              placeholder="Type your essay response here..."
+              className="w-full bg-gray-50 border-2 border-gray-100 rounded-3xl p-8 text-xl focus:ring-4 focus:ring-[#004275]/10 outline-none transition-all resize-none h-96"
+            />
+          )}
+
+          {currentQuestion?.type === 'file-upload' && (
+            <div className="p-12 bg-gray-50 rounded-[40px] border-4 border-dashed border-gray-200 text-center group hover:bg-gray-100 transition-all cursor-pointer relative">
+              <input 
+                type="file" 
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleAnswerChange(file.name);
+                }}
+              />
+              <Upload className="w-16 h-16 text-gray-300 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+              <h4 className="text-2xl font-black text-gray-900 mb-2">
+                {answers[currentQuestion.id] || 'Upload File'}
+              </h4>
+              <p className="text-gray-400">Click or drag your response file here.</p>
+            </div>
+          )}
                 </div>
 
                 {/* Question Feedback Overlay */}

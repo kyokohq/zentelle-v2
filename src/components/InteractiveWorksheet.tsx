@@ -38,9 +38,11 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [activeTool, setActiveTool] = useState<'select' | 'text' | 'rect' | 'circle' | 'draw' | 'hotspot' | 'check' | 'line'>('select');
   const [selectedHotspot, setSelectedHotspot] = useState<fabric.Object | null>(null);
   const isAdmin = userRole === 'admin';
+  const isActuallyStudent = !isAdmin || isPreviewMode;
 
   useEffect(() => {
     loadData();
@@ -90,26 +92,36 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
             selectable: false,
             evented: false,
             originX: 'left',
-            originY: 'top'
+            originY: 'top',
           });
-          canvas.add(img);
           
           canvas.setDimensions({ 
             width: canvas.width!, 
             height: (img.height || 0) * scale 
           });
 
+          // Set as background image to prevent it being moved or deleted easily
+          canvas.set('backgroundImage', img);
+          canvas.renderAll();
+
           // Priority: 1. Student's markup, 2. Teacher's template (from description)
-          if (submission?.markupData) {
-            canvas.loadFromJSON(submission.markupData).then(() => {
+          const dataToLoad = submission?.markupData || (material.description?.trim().startsWith('{') ? material.description : null);
+          
+          if (dataToLoad) {
+            try {
+              canvas.loadFromJSON(dataToLoad).then(() => {
+                // After loading JSON, ensure the background image we just loaded is still there
+                // loadFromJSON might override the background if it was saved in the JSON
+                if (!canvas.backgroundImage) {
+                  canvas.set('backgroundImage', img);
+                }
+                canvas.renderAll();
+              });
+            } catch (e) {
+              console.warn("Error loading canvas JSON:", e);
+              canvas.set('backgroundImage', img);
               canvas.renderAll();
-            });
-          } else if (material.description && material.description.trim().startsWith('{')) {
-             try {
-                canvas.loadFromJSON(material.description).then(() => canvas.renderAll());
-             } catch(e) {
-               console.warn("Valid JSON template not found in material description");
-             }
+            }
           }
         });
       }
@@ -131,23 +143,26 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         if (options.target && (options.target as any).isHotspot) {
           const hotspot = options.target as any;
           const data = hotspot.hotspotData as HotspotData;
-          if (isAdmin) {
+          if (isAdmin && !isPreviewMode) {
             setSelectedHotspot(hotspot);
           } else {
-            // Student interaction logic
+            // Student interaction (or Preview mode) logic
             if (data.type === 'info') {
               setHotspotInfo(data.content);
             } else if (data.type === 'correct' || data.type === 'incorrect') {
-              // Visual feedback for students
-              hotspot.set('fill', data.type === 'correct' ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)');
+              // Visual feedback
+              if (data.type === 'correct') {
+                hotspot.set('fill', 'rgba(34, 197, 94, 0.6)');
+                hotspot.set('stroke', '#22c55e');
+              } else {
+                hotspot.set('fill', 'rgba(239, 68, 68, 0.6)');
+                hotspot.set('stroke', '#ef4444');
+              }
               canvas.renderAll();
-              
-              // We could play a sound or show an animation here
             } else if (data.type === 'text-response') {
               const response = prompt("Enter your answer:", data.content || "");
               if (response !== null) {
                 hotspot.hotspotData = { ...data, content: response };
-                // Visual indicator that it's answered
                 hotspot.set('stroke', '#004275');
                 hotspot.set('strokeWidth', 3);
                 canvas.renderAll();
@@ -322,6 +337,21 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         </div>
 
         <div className="flex items-center gap-3">
+          {isAdmin && (
+            <button 
+              onClick={() => {
+                setIsPreviewMode(!isPreviewMode);
+                fabricCanvas?.discardActiveObject();
+                fabricCanvas?.renderAll();
+              }}
+              className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2 ${
+                isPreviewMode ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Target className="w-4 h-4" />
+              {isPreviewMode ? 'End Preview' : 'Preview Mode'}
+            </button>
+          )}
           <button 
             disabled={saving}
             onClick={handleSave}
@@ -335,73 +365,75 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
 
       <div className="flex-1 flex overflow-hidden">
         {/* Toolbar */}
-        <aside className="w-20 bg-white border-r border-gray-100 flex flex-col items-center py-6 gap-6 shadow-xl">
-          <ToolBtn 
-            active={activeTool === 'select'} 
-            onClick={() => handleToolChange('select')} 
-            icon={<MousePointer2 className="w-6 h-6" />} 
-            label="Select" 
-          />
-          <ToolBtn 
-            active={activeTool === 'draw'} 
-            onClick={() => handleToolChange('draw')} 
-            icon={<Eraser className="w-6 h-6 rotate-180" />} 
-            label="Draw" 
-          />
-          <ToolBtn 
-            active={activeTool === 'text'} 
-            onClick={() => handleToolChange('text')} 
-            icon={<Type className="w-6 h-6" />} 
-            label="Text" 
-          />
-          <ToolBtn 
-            active={activeTool === 'rect'} 
-            onClick={() => handleToolChange('rect')} 
-            icon={<Square className="w-6 h-6" />} 
-            label="Shape" 
-          />
-          <ToolBtn 
-            active={activeTool === 'hotspot'} 
-            onClick={() => handleToolChange('hotspot')} 
-            icon={<Target className="w-6 h-6" />} 
-            label="Hotspot" 
-          />
-          <ToolBtn 
-            active={activeTool === 'check'} 
-            onClick={() => handleToolChange('check')} 
-            icon={<CheckCircle2 className="w-6 h-6" />} 
-            label="Checkmark" 
-          />
-          <ToolBtn 
-            active={activeTool === 'line'} 
-            onClick={() => handleToolChange('line')} 
-            icon={<ArrowLeft className="w-6 h-6 rotate-180" />} 
-            label="Connector" 
-          />
-          
-          <div className="mt-auto flex flex-col gap-4">
-            <button 
-              onClick={() => fabricCanvas?.remove(...fabricCanvas.getActiveObjects())}
-              className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
-            >
-              <Trash2 className="w-6 h-6" />
-            </button>
-            <button 
-              onClick={() => {
-                const dataUrl = fabricCanvas?.toDataURL();
-                if (dataUrl) {
-                  const link = document.createElement('a');
-                  link.download = `worksheet-${Date.now()}.png`;
-                  link.href = dataUrl;
-                  link.click();
-                }
-              }}
-              className="p-3 text-gray-400 hover:text-[#004275] hover:bg-blue-50 rounded-2xl transition-all"
-            >
-              <Download className="w-6 h-6" />
-            </button>
-          </div>
-        </aside>
+        {!isPreviewMode && (
+          <aside className="w-20 bg-white border-r border-gray-100 flex flex-col items-center py-6 gap-6 shadow-xl">
+            <ToolBtn 
+              active={activeTool === 'select'} 
+              onClick={() => handleToolChange('select')} 
+              icon={<MousePointer2 className="w-6 h-6" />} 
+              label="Select" 
+            />
+            <ToolBtn 
+              active={activeTool === 'draw'} 
+              onClick={() => handleToolChange('draw')} 
+              icon={<Eraser className="w-6 h-6 rotate-180" />} 
+              label="Draw" 
+            />
+            <ToolBtn 
+              active={activeTool === 'text'} 
+              onClick={() => handleToolChange('text')} 
+              icon={<Type className="w-6 h-6" />} 
+              label="Text" 
+            />
+            <ToolBtn 
+              active={activeTool === 'rect'} 
+              onClick={() => handleToolChange('rect')} 
+              icon={<Square className="w-6 h-6" />} 
+              label="Shape" 
+            />
+            <ToolBtn 
+              active={activeTool === 'hotspot'} 
+              onClick={() => handleToolChange('hotspot')} 
+              icon={<Target className="w-6 h-6" />} 
+              label="Hotspot" 
+            />
+            <ToolBtn 
+              active={activeTool === 'check'} 
+              onClick={() => handleToolChange('check')} 
+              icon={<CheckCircle2 className="w-6 h-6" />} 
+              label="Checkmark" 
+            />
+            <ToolBtn 
+              active={activeTool === 'line'} 
+              onClick={() => handleToolChange('line')} 
+              icon={<ArrowLeft className="w-6 h-6 rotate-180" />} 
+              label="Connector" 
+            />
+            
+            <div className="mt-auto flex flex-col gap-4">
+              <button 
+                onClick={() => fabricCanvas?.remove(...fabricCanvas.getActiveObjects())}
+                className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+              >
+                <Trash2 className="w-6 h-6" />
+              </button>
+              <button 
+                onClick={() => {
+                  const dataUrl = fabricCanvas?.toDataURL();
+                  if (dataUrl) {
+                    const link = document.createElement('a');
+                    link.download = `worksheet-${Date.now()}.png`;
+                    link.href = dataUrl;
+                    link.click();
+                  }
+                }}
+                className="p-3 text-gray-400 hover:text-[#004275] hover:bg-blue-50 rounded-2xl transition-all"
+              >
+                <Download className="w-6 h-6" />
+              </button>
+            </div>
+          </aside>
+        )}
 
         {/* Canvas Area */}
         <main className="flex-1 overflow-auto p-12 flex flex-col items-center bg-gray-100/50">

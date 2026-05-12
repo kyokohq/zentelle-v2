@@ -11,6 +11,10 @@ import {
   ArrowLeft,
   X,
   Target,
+  CheckCircle2,
+  FileText,
+  Upload,
+  Info,
   GripVertical
 } from 'lucide-react';
 import { 
@@ -80,11 +84,15 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
       type,
       question: '',
       order: questions.length,
-      options: type === 'multiple-choice' || type === 'checkbox' ? ['', '', '', ''] : [],
-      correctAnswer: '',
+      options: type === 'multiple-choice' || type === 'checkbox' ? ['', '', '', ''] : (type === 'true-false' ? ['True', 'False'] : []),
+      correctAnswer: type === 'true-false' ? 'True' : '',
       correctAnswers: [],
       hotspots: [],
-      imageUrl: type === 'image-hotspot' ? 'https://picsum.photos/seed/worksheet/800/600' : ''
+      imageUrl: type === 'image-hotspot' ? 'https://picsum.photos/seed/worksheet/800/600' : '',
+      dropdownOptions: type === 'dropdown' ? ['', ''] : [],
+      blankCorrectAnswers: type === 'fill-in-the-blank' ? [''] : [],
+      keywords: type === 'short-answer' ? [''] : [],
+      points: 10
     };
     setQuestions([...questions, newQuestion]);
     setSelectedQuestionIndex(questions.length);
@@ -221,8 +229,13 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
               <AddQuestionBtn label="Choice" icon={CheckSquare} onClick={() => addQuestion('multiple-choice')} />
               <AddQuestionBtn label="Checkmarks" icon={CheckSquare} onClick={() => addQuestion('checkbox')} />
               <AddQuestionBtn label="Hotspot" icon={Target} onClick={() => addQuestion('image-hotspot')} />
+              <AddQuestionBtn label="True/False" icon={CheckCircle2} onClick={() => addQuestion('true-false')} />
               <AddQuestionBtn label="Short" icon={Type} onClick={() => addQuestion('short-answer')} />
+              <AddQuestionBtn label="Essay" icon={FileText} onClick={() => addQuestion('essay')} />
+              <AddQuestionBtn label="Blank" icon={Type} onClick={() => addQuestion('fill-in-the-blank')} />
               <AddQuestionBtn label="Match" icon={List} onClick={() => addQuestion('matching')} />
+              <AddQuestionBtn label="Dropdown" icon={List} onClick={() => addQuestion('dropdown')} />
+              <AddQuestionBtn label="Upload" icon={Upload} onClick={() => addQuestion('file-upload')} />
             </div>
           </div>
           
@@ -299,12 +312,6 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
                     />
                   )}
 
-                  {questions[selectedQuestionIndex].type === 'short-answer' && (
-                    <div className="p-8 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 text-center">
-                      <p className="text-gray-400 font-bold italic">Students will provide a text-based response here.</p>
-                    </div>
-                  )}
-
                   {questions[selectedQuestionIndex].type === 'image-hotspot' && (
                     <HotspotEditor 
                       question={questions[selectedQuestionIndex]} 
@@ -317,6 +324,50 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
                       question={questions[selectedQuestionIndex]} 
                       onUpdate={(updates) => updateQuestion(selectedQuestionIndex, updates)} 
                     />
+                  )}
+
+                  {questions[selectedQuestionIndex].type === 'true-false' && (
+                    <TrueFalseEditor 
+                      question={questions[selectedQuestionIndex]} 
+                      onUpdate={(updates) => updateQuestion(selectedQuestionIndex, updates)} 
+                    />
+                  )}
+
+                  {questions[selectedQuestionIndex].type === 'dropdown' && (
+                    <DropdownEditor 
+                      question={questions[selectedQuestionIndex]} 
+                      onUpdate={(updates) => updateQuestion(selectedQuestionIndex, updates)} 
+                    />
+                  )}
+
+                  {questions[selectedQuestionIndex].type === 'fill-in-the-blank' && (
+                    <FillInBlankEditor 
+                      question={questions[selectedQuestionIndex]} 
+                      onUpdate={(updates) => updateQuestion(selectedQuestionIndex, updates)} 
+                    />
+                  )}
+
+                  {questions[selectedQuestionIndex].type === 'short-answer' && (
+                    <ShortAnswerEditor 
+                      question={questions[selectedQuestionIndex]} 
+                      onUpdate={(updates) => updateQuestion(selectedQuestionIndex, updates)} 
+                    />
+                  )}
+
+                  {questions[selectedQuestionIndex].type === 'essay' && (
+                    <div className="p-12 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 text-center">
+                      <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h4 className="font-bold text-gray-900">Essay Question</h4>
+                      <p className="text-gray-400 text-sm mt-2">Students will provide a long-form text response. Manual grading is required.</p>
+                    </div>
+                  )}
+
+                  {questions[selectedQuestionIndex].type === 'file-upload' && (
+                    <div className="p-12 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 text-center">
+                      <Upload className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h4 className="font-bold text-gray-900">File Upload Question</h4>
+                      <p className="text-gray-400 text-sm mt-2">Students will need to upload a file (PDF, Doc, Image) as their response.</p>
+                    </div>
                   )}
                 </div>
               </motion.div>
@@ -647,6 +698,168 @@ function HotspotEditor({ question, onUpdate }: { question: Partial<QuizQuestion>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ShortAnswerEditor({ question, onUpdate }: { question: Partial<QuizQuestion>, onUpdate: (updates: Partial<QuizQuestion>) => void }) {
+  const addKeyword = () => {
+    onUpdate({ keywords: [...(question.keywords || []), ''] });
+  };
+
+  const updateKeyword = (idx: number, val: string) => {
+    const newKeywords = [...(question.keywords || [])];
+    newKeywords[idx] = val;
+    onUpdate({ keywords: newKeywords });
+  };
+
+  return (
+    <div className="space-y-4">
+      <label className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 block">Auto-Grading Keywords (Case-insensitive)</label>
+      <div className="space-y-2">
+        {question.keywords?.map((kw, idx) => (
+          <div key={idx} className="flex gap-2">
+            <input 
+              type="text"
+              value={kw}
+              onChange={(e) => updateKeyword(idx, e.target.value)}
+              placeholder="Enter a keyword that must be present..."
+              className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#004275]/10 outline-none transition-all"
+            />
+            <button 
+              onClick={() => onUpdate({ keywords: question.keywords?.filter((_, i) => i !== idx) })}
+              className="p-3 text-gray-300 hover:text-red-500 transition-colors"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button onClick={addKeyword} className="text-[#004275] font-bold text-sm flex items-center gap-2 hover:underline">
+        <Plus className="w-4 h-4" /> Add Required Keyword
+      </button>
+    </div>
+  );
+}
+
+function TrueFalseEditor({ question, onUpdate }: { question: Partial<QuizQuestion>, onUpdate: (updates: Partial<QuizQuestion>) => void }) {
+  return (
+    <div className="space-y-4">
+      <label className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 block">Correct Answer</label>
+      <div className="flex gap-4">
+        {['True', 'False'].map((val) => (
+          <button
+            key={val}
+            type="button"
+            onClick={() => onUpdate({ correctAnswer: val })}
+            className={`flex-1 p-6 rounded-3xl border-2 font-black transition-all ${
+              question.correctAnswer === val 
+                ? 'border-[#004275] bg-[#004275] text-white shadow-lg scale-105' 
+                : 'border-gray-100 bg-white text-gray-400 hover:bg-gray-50'
+            }`}
+          >
+            {val}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DropdownEditor({ question, onUpdate }: { question: Partial<QuizQuestion>, onUpdate: (updates: Partial<QuizQuestion>) => void }) {
+  const addOption = () => {
+    onUpdate({ dropdownOptions: [...(question.dropdownOptions || []), ''] });
+  };
+
+  const updateOption = (idx: number, val: string) => {
+    const newOptions = [...(question.dropdownOptions || [])];
+    newOptions[idx] = val;
+    onUpdate({ dropdownOptions: newOptions });
+  };
+
+  return (
+    <div className="space-y-4">
+      <label className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 block">Dropdown Selection Options</label>
+      <div className="space-y-2">
+        {question.dropdownOptions?.map((opt, idx) => (
+          <div key={idx} className="flex gap-2">
+            <input 
+              type="text"
+              value={opt}
+              onChange={(e) => updateOption(idx, e.target.value)}
+              placeholder={`Option ${idx + 1}`}
+              className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#004275]/10 outline-none transition-all"
+            />
+            <button 
+              onClick={() => onUpdate({ correctAnswer: opt })}
+              className={`p-3 rounded-xl transition-all ${
+                question.correctAnswer === opt ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'
+              }`}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => onUpdate({ dropdownOptions: question.dropdownOptions?.filter((_, i) => i !== idx) })}
+              className="p-3 text-gray-300 hover:text-red-500 transition-colors"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button onClick={addOption} className="text-[#004275] font-bold text-sm flex items-center gap-2 hover:underline">
+        <Plus className="w-4 h-4" /> Add Dropdown Option
+      </button>
+    </div>
+  );
+}
+
+function FillInBlankEditor({ question, onUpdate }: { question: Partial<QuizQuestion>, onUpdate: (updates: Partial<QuizQuestion>) => void }) {
+  const addBlank = () => {
+    onUpdate({ blankCorrectAnswers: [...(question.blankCorrectAnswers || []), ''] });
+  };
+
+  const updateBlank = (idx: number, val: string) => {
+    const newBlanks = [...(question.blankCorrectAnswers || [])];
+    newBlanks[idx] = val;
+    onUpdate({ blankCorrectAnswers: newBlanks });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-50 p-6 rounded-3xl mb-6">
+        <p className="text-xs text-blue-700 leading-relaxed font-medium">
+          <Info className="w-4 h-4 inline mr-1 mb-0.5" />
+          Instructions: Use underscores <b>____</b> in the question text above to indicate where blanks should appear. 
+          Then list the correct answers for each blank here in order.
+        </p>
+      </div>
+      <label className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 block">Correct Answers (In Order)</label>
+      <div className="space-y-2">
+        {question.blankCorrectAnswers?.map((ans, idx) => (
+          <div key={idx} className="flex gap-2">
+            <div className="w-10 h-10 bg-[#004275] text-white flex items-center justify-center rounded-xl font-black text-xs">
+              {idx + 1}
+            </div>
+            <input 
+              type="text"
+              value={ans}
+              onChange={(e) => updateBlank(idx, e.target.value)}
+              placeholder={`Answer for blank ${idx + 1}`}
+              className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#004275]/10 outline-none transition-all"
+            />
+            <button 
+              onClick={() => onUpdate({ blankCorrectAnswers: question.blankCorrectAnswers?.filter((_, i) => i !== idx) })}
+              className="p-3 text-gray-300 hover:text-red-500 transition-colors"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button onClick={addBlank} className="text-[#004275] font-bold text-sm flex items-center gap-2 hover:underline">
+        <Plus className="w-4 h-4" /> Add Blank Answer
+      </button>
     </div>
   );
 }
