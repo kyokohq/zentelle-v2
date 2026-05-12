@@ -104,6 +104,7 @@ function ZentelleApp() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isStudentView, setIsStudentView] = useState(false);
   
   // Modals
   const [showAddTask, setShowAddTask] = useState(false);
@@ -534,18 +535,23 @@ function ZentelleApp() {
     }} />;
   }
 
+  const effectiveRole = (isStudentView && userProfile?.role === 'admin') ? 'student' : userProfile?.role;
+
   return (
     <Layout 
       user={user} 
-      userRole={userProfile?.role} 
+      userRole={effectiveRole} 
       school={userSchool}
       onAddTask={() => setShowAddTask(true)}
+      isStudentView={isStudentView}
+      setIsStudentView={setIsStudentView}
+      realRole={userProfile?.role}
     >
       <Routes>
         <Route path="/" element={
           <Dashboard 
             user={user} 
-            userRole={userProfile?.role}
+            userRole={effectiveRole}
             courses={courses} 
             activities={activities} 
             reminders={reminders} 
@@ -564,23 +570,23 @@ function ZentelleApp() {
         <Route path="/courses" element={
           <Courses 
             courses={courses} 
-            userRole={userProfile?.role} 
+            userRole={effectiveRole} 
             onJoinCourse={() => setShowAddCourse(true)} 
             onCreateCourse={() => setShowCreateCourse(true)} 
             onEditCourse={(course) => setEditingCourse(course)}
             onDeleteCourse={handleDeleteCourse}
           />
         } />
-        <Route path="/courses/:courseId" element={<CourseDetail userRole={userProfile?.role} />} />
-        <Route path="/courses/:courseId/:tab" element={<CourseDetail userRole={userProfile?.role} />} />
-        <Route path="/courses/:courseId/:tab/:folderId" element={<CourseDetail userRole={userProfile?.role} />} />
-        <Route path="/courses/:courseId/assignments/:assignmentId" element={<AssignmentDetail userRole={userProfile?.role} />} />
+        <Route path="/courses/:courseId" element={<CourseDetail userRole={effectiveRole} />} />
+        <Route path="/courses/:courseId/:tab" element={<CourseDetail userRole={effectiveRole} />} />
+        <Route path="/courses/:courseId/:tab/:folderId" element={<CourseDetail userRole={effectiveRole} />} />
+        <Route path="/courses/:courseId/assignments/:assignmentId" element={<AssignmentDetail userRole={effectiveRole} />} />
         <Route path="/calendar" element={<Calendar events={events} onAddEvent={() => setShowAddEvent(true)} />} />
         <Route path="/grades" element={<Grades courses={courses} />} />
         <Route path="/attendance" element={<Attendance courses={courses} />} />
         <Route path="/groups" element={<Groups groups={groups} onCreateGroup={() => setShowCreateGroup(true)} />} />
         <Route path="/resources" element={<Resources resources={resources} onUploadResource={() => setShowUploadResource(true)} />} />
-        {userProfile?.role === 'admin' && (
+        {effectiveRole === 'admin' && (
           <Route path="/admin" element={<Admin currentUserId={user.uid} currentSchoolId={userProfile?.schoolId} userEmail={user.email} />} />
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

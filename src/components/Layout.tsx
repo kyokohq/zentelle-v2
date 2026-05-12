@@ -11,7 +11,9 @@ import {
   File,
   Users,
   Plus,
-  Shield
+  Shield,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -28,9 +30,21 @@ interface LayoutProps {
   school?: School | null;
   children: React.ReactNode;
   onAddTask: () => void;
+  isStudentView?: boolean;
+  setIsStudentView?: (view: boolean) => void;
+  realRole?: 'student' | 'teacher' | 'admin';
 }
 
-export function Layout({ user, userRole, school, children, onAddTask }: LayoutProps) {
+export function Layout({ 
+  user, 
+  userRole, 
+  school, 
+  children, 
+  onAddTask,
+  isStudentView,
+  setIsStudentView,
+  realRole
+}: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -57,7 +71,30 @@ export function Layout({ user, userRole, school, children, onAddTask }: LayoutPr
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative hidden sm:block mr-2">
+          {realRole === 'admin' && setIsStudentView && (
+            <button 
+              onClick={() => setIsStudentView(!isStudentView)}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest transition-all ${
+                isStudentView 
+                  ? 'bg-amber-400 text-amber-950 shadow-[0_0_15px_rgba(251,191,36,0.3)]' 
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              {isStudentView ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5" />
+                  Exit Student View
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5" />
+                  View as Student
+                </>
+              )}
+            </button>
+          )}
+
+          <div className="relative hidden sm:block mr-2 ml-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 w-4 h-4" />
             <input 
               className="bg-white/10 border-none rounded-full py-1.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-white/30 w-64 placeholder:text-white/50 text-white transition-all outline-none" 
