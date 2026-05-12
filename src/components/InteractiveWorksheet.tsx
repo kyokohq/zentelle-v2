@@ -6,6 +6,7 @@ import * as pdfjs from 'pdfjs-dist';
 // Configure PDF.js worker
 const PDFJS_VERSION = '5.7.284';
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+import { detectAnswerChoices, generateQuizItems, QuizQuestion } from '../services/geminiService';
 import { 
   Square, 
   Circle, 
@@ -36,7 +37,9 @@ import {
   Upload,
   ImagePlus,
   FileUp,
-  Files
+  Files,
+  Wand2,
+  Sparkles
 } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -56,6 +59,9 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [showQuizModal, setShowQuizModal] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [activeTool, setActiveTool] = useState<'select' | 'text' | 'rect' | 'circle' | 'draw' | 'hotspot' | 'check' | 'line'>('select');
   const [selectedHotspot, setSelectedHotspot] = useState<fabric.Object | null>(null);
@@ -491,6 +497,201 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     if (zoomedTop > canvasHeight - 100) {
       vpt[5] -= (zoomedTop - (canvasHeight / 2));
       fabricCanvas.requestRenderAll();
+    }
+  };
+
+  const handleDetectAnswers = async () => {
+    if (!fabricCanvas || isDetecting) return;
+    setIsDetecting(true);
+    try {
+      // Temporarily hide objects to capture background only
+      const objects = fabricCanvas.getObjects();
+      objects.forEach(obj => obj.visible = false);
+      fabricCanvas.renderAll();
+
+      // Capture canvas as data URL at native resolution if possible
+      const dataUrl = fabricCanvas.toDataURL({
+        format: 'png',
+        quality: 1,
+        multiplier: 1 / fabricCanvas.getZoom()
+      });
+
+      // Restore objects
+      objects.forEach(obj => obj.visible = true);
+      fabricCanvas.renderAll();
+
+      const detections = await detectAnswerChoices(dataUrl);
+      
+      detections.forEach(det => {
+        const left = det.x * nativeDimensions.width;
+        const top = det.y * nativeDimensions.height;
+        
+        let type = 'info' as HotspotData['type'];
+        let fill = 'rgba(0, 66, 117, 0.2)';
+        let stroke = '#004275';
+
+        if (det.type === 'text-response') {
+          type = 'text-response';
+          fill = 'rgba(249, 115, 22, 0.2)';
+          stroke = '#ea580c';
+        } else if (det.isCorrect) {
+          type = 'correct';
+          fill = 'rgba(34, 197, 94, 0.2)';
+          stroke = '#16a34a';
+        } else {
+          type = 'incorrect';
+          fill = 'rgba(239, 68, 68, 0.2)';
+          stroke = '#dc2626';
+        }
+
+        const hotspot = new fabric.Rect({
+          left: left - 20,
+          top: top - 20,
+          width: 40,
+          height: 40,
+          fill,
+          stroke,
+          strokeWidth: 2,
+          rx: 8,
+          ry: 8,
+          transparentCorners: false,
+          cornerColor: stroke,
+          cornerSize: 10,
+        });
+
+        (hotspot as any).isHotspot = true;
+        (hotspot as any).hotspotData = {
+          type,
+          content: det.label || (type === 'text-response' ? 'Type answer here' : ''),
+          id: Math.random().toString(36).substr(2, 9)
+        };
+
+        fabricCanvas.add(hotspot);
+      });
+
+      fabricCanvas.requestRenderAll();
+      alert(`AI detected ${detections.length} answer choices.`);
+    } catch (error) {
+      console.error("AI Detection Error:", error);
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  const [quizParams, setQuizParams] = useState({
+    numQuestions: 5,
+    numOptions: 4,
+    type: 'multiple-choice' as 'multiple-choice' | 'true-false' | 'text'
+  });
+
+  const handleGenerateQuizAI = async () => {
+    if (!fabricCanvas || isGeneratingQuiz) return;
+    setIsGeneratingQuiz(true);
+    try {
+      const quizItems = await generateQuizItems(
+        material?.title || "Worksheet",
+        quizParams.numQuestions,
+        quizParams.numOptions,
+        quizParams.type
+      );
+
+      // Place quiz items in a vertical column starting from viewport center or below last hotspot
+      const hotspots = fabricCanvas.getObjects().filter(obj => (obj as any).isHotspot);
+      const center = fabricCanvas.getVpCenter();
+      
+      let startLeft = center.x - 100;
+      let startTop = center.y - 100;
+
+      if (hotspots.length > 0) {
+        const lastHotspot = hotspots[hotspots.length - 1];
+        startTop = lastHotspot.top! + 100;
+        startLeft = lastHotspot.left!;
+      }
+
+      quizItems.forEach((q, qIndex) => {
+        const qY = startTop + (qIndex * 250);
+        // Create question text
+        const qText = new fabric.IText(`Q${qIndex + 1}: ${q.question}`, {
+          left: startLeft,
+          top: qY,
+          fontSize: 18,
+          fontFamily: 'Inter',
+          fontWeight: 'bold',
+          fill: '#0f172a',
+          width: 300
+        });
+        fabricCanvas.add(qText);
+
+        // If it's a text question, add one text-response hotspot
+        if (quizParams.type === 'text') {
+           const hotspot = new fabric.Rect({
+            left: startLeft,
+            top: qY + 40,
+            width: 200,
+            height: 40,
+            fill: 'rgba(249, 115, 22, 0.2)',
+            stroke: '#ea580c',
+            strokeWidth: 2,
+            rx: 6,
+            ry: 6,
+            cornerColor: '#ea580c',
+            cornerSize: 8,
+          });
+
+          (hotspot as any).isHotspot = true;
+          (hotspot as any).hotspotData = {
+            type: 'text-response',
+            content: 'Write answer here',
+            id: Math.random().toString(36).substr(2, 9)
+          };
+          fabricCanvas.add(hotspot);
+        } else {
+          // Create options as hotspots
+          q.choices.forEach((c, cIndex) => {
+            const type = c.isCorrect ? 'correct' : 'incorrect';
+            const stroke = c.isCorrect ? '#16a34a' : '#dc2626';
+            const fill = c.isCorrect ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+
+            const hotspot = new fabric.Rect({
+              left: startLeft,
+              top: qY + 40 + (cIndex * 45),
+              width: 30,
+              height: 30,
+              fill,
+              stroke,
+              strokeWidth: 2,
+              rx: 6,
+              ry: 6,
+              cornerColor: stroke,
+              cornerSize: 8,
+            });
+
+            (hotspot as any).isHotspot = true;
+            (hotspot as any).hotspotData = {
+              type,
+              content: `${c.label}) ${c.text}`,
+              id: Math.random().toString(36).substr(2, 9)
+            };
+            fabricCanvas.add(hotspot);
+
+            const optText = new fabric.IText(`${c.label}) ${c.text}`, {
+              left: startLeft + 40,
+              top: qY + 40 + (cIndex * 45) + 5,
+              fontSize: 14,
+              fontFamily: 'Inter',
+              fill: '#475569'
+            });
+            fabricCanvas.add(optText);
+          });
+        }
+      });
+
+      fabricCanvas.requestRenderAll();
+      setShowQuizModal(false);
+    } catch (error) {
+      console.error("AI Quiz error:", error);
+    } finally {
+      setIsGeneratingQuiz(false);
     }
   };
 
@@ -1009,6 +1210,30 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
 
             <div>
               <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">AI Assistance</h3>
+                <div className="w-4 h-4 rounded bg-gray-50 flex items-center justify-center border border-gray-100">
+                   <div className="w-2 h-[1px] bg-gray-300" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <ToolBtnSquare 
+                  active={isDetecting} 
+                  onClick={handleDetectAnswers} 
+                  icon={isDetecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <SearchIcon className="w-5 h-5" />} 
+                  label={isDetecting ? "Processing..." : "Detect Answers"} 
+                />
+                <ToolBtnSquare 
+                  active={showQuizModal} 
+                  onClick={() => setShowQuizModal(true)} 
+                  icon={<Sparkles className="w-5 h-5" />} 
+                  label="Quiz Gen" 
+                  isNew
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Media Assets</h3>
                 <div className="w-4 h-4 rounded bg-gray-50 flex items-center justify-center border border-gray-100">
                    <div className="w-2 h-[1px] bg-gray-300" />
@@ -1343,6 +1568,137 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           </AnimatePresence>
         </main>
       </div>
+
+      {/* Quiz Generator Modal */}
+      <AnimatePresence>
+        {showQuizModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-md rounded-[32px] shadow-2xl p-8 overflow-hidden relative"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-blue-600" />
+              <button 
+                onClick={() => setShowQuizModal(false)}
+                className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900 leading-tight">AI Quiz Generator</h3>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Powered by Gemini</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">Number of Questions</label>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={quizParams.numQuestions}
+                    onChange={(e) => setQuizParams({ ...quizParams, numQuestions: parseInt(e.target.value) })}
+                    className="w-full accent-blue-600 mb-2"
+                  />
+                  <div className="flex justify-between text-xs font-bold text-gray-400">
+                    <span>1</span>
+                    <span className="text-blue-600">{quizParams.numQuestions} Questions</span>
+                    <span>10</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">Question Type</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button 
+                      onClick={() => setQuizParams({ ...quizParams, type: 'multiple-choice' })}
+                      className={`px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all border-2 ${
+                        quizParams.type === 'multiple-choice' 
+                          ? 'bg-blue-50 border-blue-600 text-blue-600' 
+                          : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                      }`}
+                    >
+                      Multiple Choice
+                    </button>
+                    <button 
+                      onClick={() => setQuizParams({ ...quizParams, type: 'true-false' })}
+                      className={`px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all border-2 ${
+                        quizParams.type === 'true-false' 
+                          ? 'bg-blue-50 border-blue-600 text-blue-600' 
+                          : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                      }`}
+                    >
+                      True / False
+                    </button>
+                    <button 
+                      onClick={() => setQuizParams({ ...quizParams, type: 'text' })}
+                      className={`px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all border-2 ${
+                        quizParams.type === 'text' 
+                          ? 'bg-blue-50 border-blue-600 text-blue-600' 
+                          : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                      }`}
+                    >
+                      Short Answer
+                    </button>
+                  </div>
+                </div>
+
+                {quizParams.type === 'multiple-choice' && (
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">Options per Question</label>
+                    <div className="flex gap-2">
+                      {[2, 3, 4, 5].map(n => (
+                        <button 
+                          key={n}
+                          onClick={() => setQuizParams({ ...quizParams, numOptions: n })}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
+                            quizParams.numOptions === n 
+                              ? 'bg-blue-50 border-blue-600 text-blue-600' 
+                              : 'bg-white border-gray-100 text-gray-400 hover:bg-gray-50'
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button 
+                  onClick={handleGenerateQuizAI}
+                  disabled={isGeneratingQuiz}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black text-xs uppercase tracking-widest py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl shadow-blue-100 mt-4"
+                >
+                  {isGeneratingQuiz ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Generate Content
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
