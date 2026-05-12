@@ -427,6 +427,78 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     }
   }, [loading, material]);
 
+  const quickAddHotspot = () => {
+    if (!fabricCanvas || isActuallyStudent) return;
+    
+    const hotspots = fabricCanvas.getObjects().filter(obj => (obj as any).isHotspot);
+    const center = fabricCanvas.getVpCenter();
+    
+    let left = center.x - 20;
+    let top = center.y - 20;
+
+    if (hotspots.length > 0) {
+      // Find the last hotspot (max top)
+      let lastHotspot = hotspots[0];
+      hotspots.forEach(h => {
+        if (h.top! > lastHotspot.top!) {
+          lastHotspot = h;
+        }
+      });
+      
+      // If the last hotspot is somewhat nearby or we have many, place it below
+      // Otherwise use viewport center
+      left = lastHotspot.left!;
+      top = lastHotspot.top! + (lastHotspot.height! * lastHotspot.scaleY!) + 25;
+    }
+
+    const hotspot = new fabric.Rect({
+      left,
+      top,
+      width: 40,
+      height: 40,
+      fill: 'rgba(0, 66, 117, 0.2)',
+      stroke: '#004275',
+      strokeWidth: 2,
+      rx: 8,
+      ry: 8,
+      transparentCorners: false,
+      cornerColor: '#004275',
+      cornerSize: 10,
+    });
+    
+    (hotspot as any).isHotspot = true;
+    (hotspot as any).hotspotData = {
+      type: 'info',
+      content: 'New Information Point',
+      id: Math.random().toString(36).substr(2, 9)
+    };
+    
+    fabricCanvas.add(hotspot);
+    fabricCanvas.setActiveObject(hotspot);
+    setSelectedHotspot(hotspot);
+    fabricCanvas.requestRenderAll();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input/textarea
+      if (
+        e.target instanceof HTMLInputElement || 
+        e.target instanceof HTMLTextAreaElement || 
+        (e.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'h') {
+        quickAddHotspot();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fabricCanvas, isActuallyStudent, activeTool]);
+
   const [hotspotInfo, setHotspotInfo] = useState<string | null>(null);
 
   const handleToolChange = (tool: typeof activeTool) => {
