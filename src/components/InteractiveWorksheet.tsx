@@ -430,6 +430,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   const quickAddHotspot = () => {
     if (!fabricCanvas || isActuallyStudent) return;
     
+    // Use chronologically last hotspot from the object stack
     const hotspots = fabricCanvas.getObjects().filter(obj => (obj as any).isHotspot);
     const center = fabricCanvas.getVpCenter();
     
@@ -438,26 +439,21 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     let lastType: HotspotData['type'] = 'info';
 
     if (hotspots.length > 0) {
-      // Find the last hotspot (max top)
-      let lastHotspot = hotspots[0];
-      hotspots.forEach(h => {
-        if (h.top! > lastHotspot.top!) {
-          lastHotspot = h;
-        }
-      });
+      // Find the chronologically last hotspot added (last in the array)
+      const lastHotspot = hotspots[hotspots.length - 1];
       
-      // If the last hotspot is somewhat nearby or we have many, place it below
-      // Otherwise use viewport center
+      // Place it directly under the last one
       left = lastHotspot.left!;
-      top = lastHotspot.top! + (lastHotspot.height! * lastHotspot.scaleY!) + 25;
+      top = lastHotspot.top! + (lastHotspot.height! * lastHotspot.scaleY!) + 20; // Slightly smaller gap
       lastType = (lastHotspot as any).hotspotData?.type || 'info';
     }
 
-    // Determine color based on last type
+    // Determine colors based on type
     let fill = 'rgba(0, 66, 117, 0.2)';
-    if (lastType === 'correct') fill = 'rgba(34, 197, 94, 0.2)';
-    if (lastType === 'incorrect') fill = 'rgba(239, 68, 68, 0.2)';
-    if (lastType === 'text-response') fill = 'rgba(249, 115, 22, 0.2)';
+    let stroke = '#004275';
+    if (lastType === 'correct') { fill = 'rgba(34, 197, 94, 0.2)'; stroke = '#16a34a'; }
+    if (lastType === 'incorrect') { fill = 'rgba(239, 68, 68, 0.2)'; stroke = '#dc2626'; }
+    if (lastType === 'text-response') { fill = 'rgba(249, 115, 22, 0.2)'; stroke = '#ea580c'; }
 
     const hotspot = new fabric.Rect({
       left,
@@ -465,12 +461,12 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       width: 40,
       height: 40,
       fill,
-      stroke: '#004275',
+      stroke,
       strokeWidth: 2,
       rx: 8,
       ry: 8,
       transparentCorners: false,
-      cornerColor: '#004275',
+      cornerColor: stroke,
       cornerSize: 10,
     });
     
@@ -485,6 +481,17 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     fabricCanvas.setActiveObject(hotspot);
     setSelectedHotspot(hotspot);
     fabricCanvas.requestRenderAll();
+
+    // Scroll viewport if new hotspot is out of view
+    const vpt = fabricCanvas.viewportTransform!;
+    const zoom = fabricCanvas.getZoom();
+    const zoomedTop = top * zoom + vpt[5];
+    const canvasHeight = fabricCanvas.getHeight();
+
+    if (zoomedTop > canvasHeight - 100) {
+      vpt[5] -= (zoomedTop - (canvasHeight / 2));
+      fabricCanvas.requestRenderAll();
+    }
   };
 
   const duplicateSelection = async () => {
