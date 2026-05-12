@@ -62,9 +62,29 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   const isAdmin = userRole === 'admin';
   const isActuallyStudent = !isAdmin || isPreviewMode;
 
+  const [zoom, setZoom] = useState(1);
+  const baseWidth = 1000;
+
   useEffect(() => {
     loadData();
   }, [materialId]);
+
+  const handleZoom = (level: number) => {
+    if (!fabricCanvas) return;
+    const newZoom = Math.min(Math.max(level, 0.5), 2);
+    setZoom(newZoom);
+    
+    // Scale canvas dimensions based on zoom
+    const bg = fabricCanvas.backgroundImage as fabric.Image;
+    if (bg) {
+      const scale = (baseWidth / bg.width!) * newZoom;
+      fabricCanvas.setDimensions({
+        width: baseWidth * newZoom,
+        height: (bg.height! * baseWidth / bg.width!) * newZoom
+      });
+      fabricCanvas.setZoom(newZoom);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -93,10 +113,11 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   useEffect(() => {
     if (!loading && canvasRef.current && material) {
       const canvas = new fabric.Canvas(canvasRef.current, {
-        width: 1000,
-        height: 1000,
+        width: baseWidth * zoom,
+        height: 1000 * zoom,
         backgroundColor: '#fff',
       });
+      canvas.setZoom(zoom);
 
       // Load background image
       const loadBackground = async () => {
@@ -144,7 +165,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
             crossOrigin: 'anonymous'
           });
 
-          const targetWidth = 1000;
+          const targetWidth = baseWidth;
           const scale = targetWidth / img.width!;
           img.set({
             scaleX: scale,
@@ -163,6 +184,11 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           };
           
           canvas.setDimensions(dimensions);
+          canvas.setZoom(zoom);
+          canvas.setDimensions({
+            width: targetWidth * zoom,
+            height: (img.height || 0) * scale * zoom
+          });
 
           // Set as background image to prevent it being moved or deleted easily
           canvas.set('backgroundImage', img);
@@ -175,14 +201,24 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
             try {
               await canvas.loadFromJSON(dataToLoad);
               // After loading JSON, ensure the background image and dimensions are correct
-              canvas.setDimensions(dimensions);
+              const zoomedDimensions = {
+                width: targetWidth * zoom,
+                height: (img.height || 0) * scale * zoom
+              };
+              canvas.setDimensions(zoomedDimensions);
+              canvas.setZoom(zoom);
               if (!canvas.backgroundImage) {
                 canvas.set('backgroundImage', img);
               }
               canvas.renderAll();
             } catch (e) {
               console.warn("Error loading canvas JSON:", e);
-              canvas.setDimensions(dimensions);
+              const zoomedDimensions = {
+                width: targetWidth * zoom,
+                height: (img.height || 0) * scale * zoom
+              };
+              canvas.setDimensions(zoomedDimensions);
+              canvas.setZoom(zoom);
               canvas.set('backgroundImage', img);
               canvas.renderAll();
             }
@@ -361,7 +397,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       const img = await fabric.Image.fromURL(data, { crossOrigin: 'anonymous' });
       
       if (isBackground) {
-        const targetWidth = 1000;
+        const targetWidth = baseWidth;
         const scale = targetWidth / img.width!;
         img.set({ 
           scaleX: scale, 
@@ -375,9 +411,10 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         });
         
         fabricCanvas.setDimensions({ 
-          width: targetWidth, 
-          height: (img.height || 0) * scale 
+          width: targetWidth * zoom, 
+          height: ((img.height || 0) * scale) * zoom
         });
+        fabricCanvas.setZoom(zoom);
         fabricCanvas.set('backgroundImage', img);
         
         // Also update Firestore material if teacher
@@ -436,7 +473,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         const imageUrl = finalCanvas.toDataURL();
         const img = await fabric.Image.fromURL(imageUrl, { crossOrigin: 'anonymous' });
 
-        const targetWidth = 1000;
+        const targetWidth = baseWidth;
         const scale = targetWidth / img.width!;
         img.set({ 
           scaleX: scale, 
@@ -450,9 +487,10 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         });
         
         fabricCanvas.setDimensions({ 
-          width: targetWidth, 
-          height: (img.height || 0) * scale 
+          width: targetWidth * zoom, 
+          height: ((img.height || 0) * scale) * zoom
         });
+        fabricCanvas.setZoom(zoom);
         fabricCanvas.set('backgroundImage', img);
         
         if (isAdmin && !isPreviewMode) {
@@ -753,6 +791,27 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
                 <span className="text-xs font-bold text-gray-600 uppercase">Default</span>
                 <ChevronDown className="w-3 h-3 text-gray-400" />
              </button>
+
+             <div className="h-4 w-[1px] bg-gray-200" />
+
+             {/* Zoom Controls */}
+             <div className="flex items-center bg-white border border-gray-100 rounded-lg overflow-hidden shadow-sm">
+                <button 
+                  onClick={() => handleZoom(zoom - 0.1)}
+                  className="p-1 px-2.5 hover:bg-gray-50 border-r border-gray-100 text-gray-500 transition-colors"
+                >
+                  -
+                </button>
+                <span className="px-3 text-[10px] font-black text-gray-600 tabular-nums">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button 
+                  onClick={() => handleZoom(zoom + 0.1)}
+                  className="p-1 px-2.5 hover:bg-gray-50 border-l border-gray-100 text-gray-500 transition-colors"
+                >
+                  +
+                </button>
+             </div>
           </div>
 
           <div className="flex items-center gap-4">
