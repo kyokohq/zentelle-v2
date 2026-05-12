@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import * as pdfjs from 'pdfjs-dist';
 
 // Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+const PDFJS_VERSION = '5.7.284';
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
 import { 
   Square, 
   Circle, 
@@ -64,34 +65,31 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
 
   const [zoom, setZoom] = useState(1);
   const [nativeDimensions, setNativeDimensions] = useState({ width: 1000, height: 1000 });
-
-  useEffect(() => {
-    loadData();
-  }, [materialId]);
+  const [numPages, setNumPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageCumulativeHeights, setPageCumulativeHeights] = useState<number[]>([]);
+  const mainRef = useRef<HTMLElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleZoom = (level: number) => {
     if (!fabricCanvas) return;
     const newZoom = Math.min(Math.max(level, 0.1), 3);
-    setZoom(newZoom);
     
-    // Scale canvas dimensions based on zoom
-    const bg = fabricCanvas.backgroundImage as fabric.Image;
-    if (bg) {
-      fabricCanvas.setDimensions({
-        width: bg.width! * newZoom,
-        height: bg.height! * newZoom
-      });
-      fabricCanvas.setZoom(newZoom);
-    }
+    // Zoom to center of viewport
+    const center = fabricCanvas.getVpCenter();
+    fabricCanvas.zoomToPoint(new fabric.Point(center.x, center.y), newZoom);
+    setZoom(newZoom);
   };
 
   const loadData = async () => {
-    setLoading(true);
+    console.log("InteractiveWorksheet: loadData starting");
+    if (!material) setLoading(true);
     try {
       const matDoc = await getDoc(doc(db, 'materials', materialId));
       if (matDoc.exists()) {
         const matData = { id: matDoc.id, ...matDoc.data() } as Material;
         setMaterial(matData);
+        console.log("InteractiveWorksheet: Material loaded", matData.title);
 
         // If student, check for existing submission
         if (auth.currentUser && !isAdmin) {
@@ -99,24 +97,46 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           const subDoc = await getDoc(doc(db, 'submissions', subId));
           if (subDoc.exists()) {
             setSubmission({ id: subDoc.id, ...subDoc.data() } as Submission);
+            console.log("InteractiveWorksheet: Submission loaded");
           }
         }
+      } else {
+        console.warn("InteractiveWorksheet: Material not found", materialId);
       }
     } catch (error) {
       console.error("Error loading worksheet data:", error);
     } finally {
+      console.log("InteractiveWorksheet: loadData finished");
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!loading && canvasRef.current && material) {
+    let mounted = true;
+    if (mounted) {
+      loadData();
+    }
+    return () => { mounted = false; };
+  }, [materialId, auth.currentUser?.uid]);
+
+  const isInitializing = useRef(false);
+
+  useEffect(() => {
+    if (loading || !canvasRef.current || !material || !containerRef.current || isInitializing.current || fabricCanvas) return;
+    
+    isInitializing.current = true;
+    console.log("InteractiveWorksheet: Initializing Canvas");
+    const container = containerRef.current;
+    
+    try {
       const canvas = new fabric.Canvas(canvasRef.current, {
-        width: nativeDimensions.width * zoom,
-        height: nativeDimensions.height * zoom,
-        backgroundColor: '#fff',
+        width: container.clientWidth,
+        height: container.clientHeight,
+        backgroundColor: '#f1f5f9',
+        preserveObjectStacking: true,
       });
-      canvas.setZoom(zoom);
+
+      setFabricCanvas(canvas);
 
       // Load background image
       const loadBackground = async () => {
@@ -134,6 +154,10 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
             const pages: HTMLCanvasElement[] = [];
             let totalHeight = 0;
             let maxWidth = 0;
+            const PAGE_GAP_PX = 40; // Spacing between pages in the combined image
+            const cumulativeHeights: number[] = [];
+
+            setNumPages(pdf.numPages);
 
             for (let i = 1; i <= pdf.numPages; i++) {
               const page = await pdf.getPage(i);
@@ -144,34 +168,53 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
               offscreenCanvas.width = viewport.width;
               await page.render({ canvasContext: context!, viewport, canvas: offscreenCanvas }).promise;
               pages.push(offscreenCanvas);
-              totalHeight += viewport.height;
+              
+              cumulativeHeights.push(totalHeight);
+              totalHeight += viewport.height + (i < pdf.numPages ? PAGE_GAP_PX : 0);
               maxWidth = Math.max(maxWidth, viewport.width);
             }
+            setPageCumulativeHeights(cumulativeHeights);
 
             const finalCanvas = document.createElement('canvas');
             finalCanvas.width = maxWidth;
             finalCanvas.height = totalHeight;
             const ctx = finalCanvas.getContext('2d')!;
+            
+            // Fill background with light gray to create "page gaps"
+            ctx.fillStyle = '#f1f5f9';
+            ctx.fillRect(0, 0, maxWidth, totalHeight);
+
             let currentY = 0;
             for (const p of pages) {
-              ctx.drawImage(p, 0, currentY);
-              currentY += p.height;
+              // Center pages if they have different widths
+              const xOffset = (maxWidth - p.width) / 2;
+              
+              // Draw "page shadow" for the individual page
+              ctx.shadowColor = 'rgba(0,0,0,0.1)';
+              ctx.shadowBlur = 20;
+              ctx.shadowOffsetX = 0;
+              ctx.shadowOffsetY = 4;
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(xOffset, currentY, p.width, p.height);
+              
+              // Draw the actual page
+              ctx.shadowBlur = 0;
+              ctx.drawImage(p, xOffset, currentY);
+              currentY += p.height + PAGE_GAP_PX;
             }
-            imageUrl = finalCanvas.toDataURL();
+            imageUrl = finalCanvas.toDataURL('image/jpeg', 0.85);
           }
 
           const img = await fabric.Image.fromURL(imageUrl, {
             crossOrigin: 'anonymous'
           });
 
-          // Use original dimensions
+          // Store native dimensions
           const targetWidth = img.width!;
           const targetHeight = img.height!;
           setNativeDimensions({ width: targetWidth, height: targetHeight });
 
           img.set({
-            scaleX: 1,
-            scaleY: 1,
             selectable: false,
             evented: false,
             originX: 'left',
@@ -180,20 +223,19 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
             top: 0
           });
           
-          const dimensions = { 
-            width: targetWidth, 
-            height: targetHeight
-          };
-          
-          canvas.setDimensions({
-            width: targetWidth * zoom,
-            height: targetHeight * zoom
-          });
-          canvas.setZoom(zoom);
-
-          // Set as background image to prevent it being moved or deleted easily
+          // Set as background image
           canvas.set('backgroundImage', img);
-          canvas.renderAll();
+
+          // Initial centering and fit
+          const initialZoom = (container.clientWidth - 100) / targetWidth;
+          canvas.setZoom(Math.min(initialZoom, 1));
+          setZoom(Math.min(initialZoom, 1));
+          
+          // Center the content initially
+          const vpt = canvas.viewportTransform!;
+          vpt[4] = (canvas.getWidth() - targetWidth * canvas.getZoom()) / 2;
+          vpt[5] = 50; // top padding
+          canvas.requestRenderAll();
 
           // Priority: 1. Student's markup, 2. Teacher's template (from description)
           const dataToLoad = submission?.markupData || (material.description?.trim().startsWith('{') ? material.description : null);
@@ -201,17 +243,8 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           if (dataToLoad) {
             try {
               await canvas.loadFromJSON(dataToLoad);
-              
-              // Distinguish between loading a template vs loading a student's own work
               const isTemplateLoad = dataToLoad === material.description;
 
-              // After loading JSON, ensure the background image and dimensions are correct
-              const zoomedDimensions = {
-                width: targetWidth * zoom,
-                height: targetHeight * zoom
-              };
-              canvas.setDimensions(zoomedDimensions);
-              canvas.setZoom(zoom);
               if (!canvas.backgroundImage) {
                 canvas.set('backgroundImage', img);
               }
@@ -219,25 +252,15 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
               // Lock objects if student
               if (isActuallyStudent) {
                 canvas.getObjects().forEach(obj => {
-                  // Lock if it's explicitly marked as template OR if we are loading the pure template
                   if ((obj as any).isTemplate || isTemplateLoad) {
                     obj.selectable = false;
-                    if (!(obj as any).isHotspot) {
-                      obj.evented = false;
-                    }
+                    obj.evented = (obj as any).isHotspot; // Only hotspots remain reactive
                   }
                 });
               }
-
-              canvas.renderAll();
+              canvas.requestRenderAll();
             } catch (e) {
               console.warn("Error loading canvas JSON:", e);
-              const zoomedDimensions = {
-                width: targetWidth * zoom,
-                height: targetHeight * zoom
-              };
-              canvas.setDimensions(zoomedDimensions);
-              canvas.setZoom(zoom);
               canvas.set('backgroundImage', img);
               canvas.renderAll();
             }
@@ -248,6 +271,95 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       };
 
       loadBackground();
+      
+      // Infinite Canvas Panning & Scrolling Logic
+      canvas.on('mouse:wheel', function(opt) {
+        var delta = opt.e.deltaY;
+        var zoom = canvas.getZoom();
+        
+        if (opt.e.ctrlKey) {
+          // Zoom
+          zoom *= 0.999 ** delta;
+          if (zoom > 3) zoom = 3;
+          if (zoom < 0.1) zoom = 0.1;
+          canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+          setZoom(zoom);
+        } else {
+          // Pan Vertical
+          var vpt = this.viewportTransform!;
+          vpt[5] -= delta;
+          
+          // Constrain vertical panning
+          const bgHeight = (canvas.backgroundImage as fabric.Image)?.height || 0;
+          const zoomedHeight = bgHeight * zoom;
+          const minPan = canvas.getHeight() - zoomedHeight - 100;
+          if (vpt[5] > 100) vpt[5] = 100;
+          if (vpt[5] < minPan) vpt[5] = minPan;
+        }
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
+        canvas.requestRenderAll();
+        
+        // Update current page based on scroll
+        if (pageCumulativeHeights.length > 0) {
+          const vpt = canvas.viewportTransform!;
+          const currentY = -vpt[5] / zoom;
+          let newPage = 1;
+          for (let i = pageCumulativeHeights.length - 1; i >= 0; i--) {
+            if (currentY >= pageCumulativeHeights[i]) {
+              newPage = i + 1;
+              break;
+            }
+          }
+          setCurrentPage(newPage);
+        }
+      });
+
+      canvas.on('mouse:down', function(opt) {
+        var evt = opt.e;
+        if (evt.altKey === true || activeTool === 'select' && !opt.target) {
+          this.isDragging = true;
+          this.selection = false;
+          this.lastPosX = evt.clientX;
+          this.lastPosY = evt.clientY;
+        }
+      });
+
+      canvas.on('mouse:move', function(opt) {
+        if (this.isDragging) {
+          var e = opt.e;
+          var vpt = this.viewportTransform!;
+          vpt[4] += e.clientX - this.lastPosX;
+          vpt[5] += e.clientY - this.lastPosY;
+          
+          // Constrain horizontal panning to keep some of the PDF visible
+          const bgWidth = (canvas.backgroundImage as fabric.Image)?.width || 0;
+          const zoomedWidth = bgWidth * canvas.getZoom();
+          const maxLeft = canvas.getWidth() - 100;
+          const minLeft = -zoomedWidth + 100;
+          if (vpt[4] > maxLeft) vpt[4] = maxLeft;
+          if (vpt[4] < minLeft) vpt[4] = minLeft;
+
+          this.requestRenderAll();
+          this.lastPosX = e.clientX;
+          this.lastPosY = e.clientY;
+        }
+      });
+
+      canvas.on('mouse:up', function(opt) {
+        this.setViewportTransform(this.viewportTransform!);
+        this.isDragging = false;
+        this.selection = true;
+      });
+
+      // Handle resize
+      const resizeObserver = new ResizeObserver(() => {
+        canvas.setDimensions({
+          width: container.clientWidth,
+          height: container.clientHeight
+        });
+      });
+      resizeObserver.observe(container);
 
       setFabricCanvas(canvas);
 
@@ -306,7 +418,12 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
 
       return () => {
         canvas.dispose();
+        isInitializing.current = false;
+        setFabricCanvas(null);
       };
+    } catch (error) {
+      console.error("InteractiveWorksheet: Error initializing canvas", error);
+      isInitializing.current = false;
     }
   }, [loading, material]);
 
@@ -416,6 +533,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       const img = await fabric.Image.fromURL(data, { crossOrigin: 'anonymous' });
       
       if (isBackground) {
+        // Compress the image before saving as background
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = img.width!;
+        offscreenCanvas.height = img.height!;
+        const ctx = offscreenCanvas.getContext('2d')!;
+        ctx.drawImage(img.getElement() as HTMLImageElement, 0, 0);
+        const compressedData = offscreenCanvas.toDataURL('image/jpeg', 0.7);
+
         // Use original dimensions
         const targetWidth = img.width!;
         const targetHeight = img.height!;
@@ -441,7 +566,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         
         // Also update Firestore material if teacher
         if (isAdmin && !isPreviewMode) {
-          updateDoc(doc(db, 'materials', materialId), { url: data });
+          updateDoc(doc(db, 'materials', materialId), { url: compressedData });
         }
       } else {
         img.scaleToWidth(200);
@@ -468,6 +593,10 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         const pages: HTMLCanvasElement[] = [];
         let totalHeight = 0;
         let maxWidth = 0;
+        const PAGE_GAP_PX = 40;
+        const cumulativeHeights: number[] = [];
+
+        setNumPages(pdf.numPages);
 
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
@@ -478,21 +607,36 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           offscreenCanvas.width = viewport.width;
           await page.render({ canvasContext: context!, viewport, canvas: offscreenCanvas }).promise;
           pages.push(offscreenCanvas);
-          totalHeight += viewport.height;
+          
+          cumulativeHeights.push(totalHeight / 2);
+          totalHeight += viewport.height + (i < pdf.numPages ? PAGE_GAP_PX : 0);
           maxWidth = Math.max(maxWidth, viewport.width);
         }
+        setPageCumulativeHeights(cumulativeHeights);
 
         const finalCanvas = document.createElement('canvas');
         finalCanvas.width = maxWidth;
         finalCanvas.height = totalHeight;
         const ctx = finalCanvas.getContext('2d')!;
+        
+        ctx.fillStyle = '#f1f5f9';
+        ctx.fillRect(0, 0, maxWidth, totalHeight);
+
         let currentY = 0;
         for (const p of pages) {
-          ctx.drawImage(p, 0, currentY);
-          currentY += p.height;
+          const xOffset = (maxWidth - p.width) / 2;
+          ctx.shadowColor = 'rgba(0,0,0,0.1)';
+          ctx.shadowBlur = 20;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 4;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(xOffset, currentY, p.width, p.height);
+          ctx.shadowBlur = 0;
+          ctx.drawImage(p, xOffset, currentY);
+          currentY += p.height + PAGE_GAP_PX;
         }
         
-        const imageUrl = finalCanvas.toDataURL();
+        const imageUrl = finalCanvas.toDataURL('image/jpeg', 0.85);
         const img = await fabric.Image.fromURL(imageUrl, { crossOrigin: 'anonymous' });
 
         // Use original dimensions
@@ -553,7 +697,13 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         });
       }
 
-      const canvasJson = JSON.stringify(fabricCanvas.toObject(['isHotspot', 'hotspotData', 'isTemplate']));
+      // Export canvas to object and explicitly remove backgroundImage to save significant space
+      // since we load it separately from material.url
+      const obj = fabricCanvas.toObject(['isHotspot', 'hotspotData', 'isTemplate']);
+      if (obj.backgroundImage) {
+        delete obj.backgroundImage;
+      }
+      const canvasJson = JSON.stringify(obj);
       
       if (isAdmin && !isPreviewMode) {
         // Teacher saves the template
@@ -605,6 +755,28 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#004275] border-t-transparent"></div>
     </div>
   );
+
+  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
+    if (pageCumulativeHeights.length === 0) return;
+    
+    const scrollTop = e.currentTarget.scrollTop;
+    const scrollContainerHeight = e.currentTarget.clientHeight;
+    const viewCenter = scrollTop + (scrollContainerHeight / 4); // Use upper quadrant for detection
+    
+    // Find current page based on scroll position
+    let newPage = 1;
+    for (let i = pageCumulativeHeights.length - 1; i >= 0; i--) {
+      const pageTop = pageCumulativeHeights[i] * zoom;
+      if (viewCenter >= pageTop) {
+        newPage = i + 1;
+        break;
+      }
+    }
+    
+    if (newPage !== currentPage) {
+      setCurrentPage(newPage);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-white z-[200] flex">
@@ -856,9 +1028,15 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
 
               <button 
                 onClick={() => {
-                  const mainWidth = document.querySelector('main')?.clientWidth || 1000;
-                  const newZoom = (mainWidth - 80) / nativeDimensions.width;
-                  handleZoom(newZoom);
+                  if (!fabricCanvas || !containerRef.current) return;
+                  const newZoom = (containerRef.current.clientWidth - 100) / nativeDimensions.width;
+                  fabricCanvas.setZoom(newZoom);
+                  setZoom(newZoom);
+                  // Centering logic
+                  const vpt = fabricCanvas.viewportTransform!;
+                  vpt[4] = (fabricCanvas.getWidth() - nativeDimensions.width * newZoom) / 2;
+                  vpt[5] = 50;
+                  fabricCanvas.requestRenderAll();
                 }}
                 className="px-3 py-1.5 bg-white border border-gray-100 rounded-lg text-[10px] font-black uppercase text-gray-400 hover:text-blue-600 transition-colors shadow-sm"
               >
@@ -968,8 +1146,30 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         )}
 
         {/* Canvas Area */}
-        <main className="flex-1 overflow-auto p-8 sm:p-12 lg:p-16 flex flex-col items-center bg-[#f8fafc] scroll-smooth">
-          <div className="shadow-2xl rounded-2xl overflow-hidden h-fit bg-white border border-gray-100 mb-20 group relative transition-all duration-300 transform-gpu">
+        <main 
+          ref={mainRef}
+          className="flex-1 overflow-hidden flex flex-col items-center bg-[#f1f5f9] relative"
+        >
+          {/* Page Indicator */}
+          {numPages > 1 && (
+            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-900/80 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest z-50 shadow-2xl border border-white/10 flex items-center gap-3">
+              <span>Page {currentPage} of {numPages}</span>
+              <div className="h-3 w-[1px] bg-white/20" />
+              <div className="flex gap-1">
+                {Array.from({ length: numPages }).map((_, i) => (
+                  <div 
+                    key={i} 
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${i + 1 === currentPage ? 'bg-blue-400 w-3' : 'bg-white/20'}`} 
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div 
+            ref={containerRef}
+            className="w-full h-full relative"
+          >
             <canvas ref={canvasRef} />
             
             {/* If no content / placeholder look from image */}
