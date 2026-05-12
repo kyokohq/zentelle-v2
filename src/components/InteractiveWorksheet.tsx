@@ -63,7 +63,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   const isActuallyStudent = !isAdmin || isPreviewMode;
 
   const [zoom, setZoom] = useState(1);
-  const baseWidth = 1000;
+  const [nativeDimensions, setNativeDimensions] = useState({ width: 1000, height: 1000 });
 
   useEffect(() => {
     loadData();
@@ -71,16 +71,15 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
 
   const handleZoom = (level: number) => {
     if (!fabricCanvas) return;
-    const newZoom = Math.min(Math.max(level, 0.5), 2);
+    const newZoom = Math.min(Math.max(level, 0.1), 3);
     setZoom(newZoom);
     
     // Scale canvas dimensions based on zoom
     const bg = fabricCanvas.backgroundImage as fabric.Image;
     if (bg) {
-      const scale = (baseWidth / bg.width!) * newZoom;
       fabricCanvas.setDimensions({
-        width: baseWidth * newZoom,
-        height: (bg.height! * baseWidth / bg.width!) * newZoom
+        width: bg.width! * newZoom,
+        height: bg.height! * newZoom
       });
       fabricCanvas.setZoom(newZoom);
     }
@@ -113,8 +112,8 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   useEffect(() => {
     if (!loading && canvasRef.current && material) {
       const canvas = new fabric.Canvas(canvasRef.current, {
-        width: baseWidth * zoom,
-        height: 1000 * zoom,
+        width: nativeDimensions.width * zoom,
+        height: nativeDimensions.height * zoom,
         backgroundColor: '#fff',
       });
       canvas.setZoom(zoom);
@@ -165,11 +164,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
             crossOrigin: 'anonymous'
           });
 
-          const targetWidth = baseWidth;
-          const scale = targetWidth / img.width!;
+          // Use original dimensions
+          const targetWidth = img.width!;
+          const targetHeight = img.height!;
+          setNativeDimensions({ width: targetWidth, height: targetHeight });
+
           img.set({
-            scaleX: scale,
-            scaleY: scale,
+            scaleX: 1,
+            scaleY: 1,
             selectable: false,
             evented: false,
             originX: 'left',
@@ -180,15 +182,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           
           const dimensions = { 
             width: targetWidth, 
-            height: (img.height || 0) * scale 
+            height: targetHeight
           };
           
-          canvas.setDimensions(dimensions);
-          canvas.setZoom(zoom);
           canvas.setDimensions({
             width: targetWidth * zoom,
-            height: (img.height || 0) * scale * zoom
+            height: targetHeight * zoom
           });
+          canvas.setZoom(zoom);
 
           // Set as background image to prevent it being moved or deleted easily
           canvas.set('backgroundImage', img);
@@ -200,22 +201,40 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           if (dataToLoad) {
             try {
               await canvas.loadFromJSON(dataToLoad);
+              
+              // Distinguish between loading a template vs loading a student's own work
+              const isTemplateLoad = dataToLoad === material.description;
+
               // After loading JSON, ensure the background image and dimensions are correct
               const zoomedDimensions = {
                 width: targetWidth * zoom,
-                height: (img.height || 0) * scale * zoom
+                height: targetHeight * zoom
               };
               canvas.setDimensions(zoomedDimensions);
               canvas.setZoom(zoom);
               if (!canvas.backgroundImage) {
                 canvas.set('backgroundImage', img);
               }
+
+              // Lock objects if student
+              if (isActuallyStudent) {
+                canvas.getObjects().forEach(obj => {
+                  // Lock if it's explicitly marked as template OR if we are loading the pure template
+                  if ((obj as any).isTemplate || isTemplateLoad) {
+                    obj.selectable = false;
+                    if (!(obj as any).isHotspot) {
+                      obj.evented = false;
+                    }
+                  }
+                });
+              }
+
               canvas.renderAll();
             } catch (e) {
               console.warn("Error loading canvas JSON:", e);
               const zoomedDimensions = {
                 width: targetWidth * zoom,
-                height: (img.height || 0) * scale * zoom
+                height: targetHeight * zoom
               };
               canvas.setDimensions(zoomedDimensions);
               canvas.setZoom(zoom);
@@ -397,11 +416,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       const img = await fabric.Image.fromURL(data, { crossOrigin: 'anonymous' });
       
       if (isBackground) {
-        const targetWidth = baseWidth;
-        const scale = targetWidth / img.width!;
+        // Use original dimensions
+        const targetWidth = img.width!;
+        const targetHeight = img.height!;
+        setNativeDimensions({ width: targetWidth, height: targetHeight });
+
         img.set({ 
-          scaleX: scale, 
-          scaleY: scale, 
+          scaleX: 1, 
+          scaleY: 1, 
           selectable: false, 
           evented: false,
           originX: 'left',
@@ -412,7 +434,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         
         fabricCanvas.setDimensions({ 
           width: targetWidth * zoom, 
-          height: ((img.height || 0) * scale) * zoom
+          height: targetHeight * zoom
         });
         fabricCanvas.setZoom(zoom);
         fabricCanvas.set('backgroundImage', img);
@@ -473,11 +495,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         const imageUrl = finalCanvas.toDataURL();
         const img = await fabric.Image.fromURL(imageUrl, { crossOrigin: 'anonymous' });
 
-        const targetWidth = baseWidth;
-        const scale = targetWidth / img.width!;
+        // Use original dimensions
+        const targetWidth = img.width!;
+        const targetHeight = img.height!;
+        setNativeDimensions({ width: targetWidth, height: targetHeight });
+
         img.set({ 
-          scaleX: scale, 
-          scaleY: scale, 
+          scaleX: 1, 
+          scaleY: 1, 
           selectable: false, 
           evented: false,
           originX: 'left',
@@ -488,7 +513,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         
         fabricCanvas.setDimensions({ 
           width: targetWidth * zoom, 
-          height: ((img.height || 0) * scale) * zoom
+          height: targetHeight * zoom
         });
         fabricCanvas.setZoom(zoom);
         fabricCanvas.set('backgroundImage', img);
@@ -521,9 +546,16 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     if (!fabricCanvas || !auth.currentUser) return;
     setSaving(true);
     try {
-      const canvasJson = JSON.stringify(fabricCanvas.toObject(['isHotspot', 'hotspotData']));
+      if (isAdmin && !isPreviewMode) {
+        // Tag all current objects as template before saving
+        fabricCanvas.getObjects().forEach(obj => {
+          (obj as any).isTemplate = true;
+        });
+      }
+
+      const canvasJson = JSON.stringify(fabricCanvas.toObject(['isHotspot', 'hotspotData', 'isTemplate']));
       
-      if (isAdmin) {
+      if (isAdmin && !isPreviewMode) {
         // Teacher saves the template
         await updateDoc(doc(db, 'materials', materialId), {
           description: canvasJson,
@@ -795,23 +827,44 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
              <div className="h-4 w-[1px] bg-gray-200" />
 
              {/* Zoom Controls */}
-             <div className="flex items-center bg-white border border-gray-100 rounded-lg overflow-hidden shadow-sm">
+             <div className="flex items-center bg-white border border-gray-100 rounded-lg overflow-hidden shadow-sm mr-2">
                 <button 
                   onClick={() => handleZoom(zoom - 0.1)}
-                  className="p-1 px-2.5 hover:bg-gray-50 border-r border-gray-100 text-gray-500 transition-colors"
+                  title="Zoom Out"
+                  className="p-1.5 px-3 hover:bg-gray-50 border-r border-gray-100 text-gray-500 transition-colors"
                 >
                   -
                 </button>
-                <span className="px-3 text-[10px] font-black text-gray-600 tabular-nums">
+                <span className="px-3 text-[10px] font-black text-gray-600 tabular-nums min-w-[50px] text-center">
                   {Math.round(zoom * 100)}%
                 </span>
                 <button 
                   onClick={() => handleZoom(zoom + 0.1)}
-                  className="p-1 px-2.5 hover:bg-gray-50 border-l border-gray-100 text-gray-500 transition-colors"
+                  title="Zoom In"
+                  className="p-1.5 px-3 hover:bg-gray-50 border-l border-gray-100 text-gray-500 transition-colors"
                 >
                   +
                 </button>
              </div>
+
+             <button 
+                onClick={() => handleZoom(1)}
+                className="px-3 py-1.5 bg-white border border-gray-100 rounded-lg text-[10px] font-black uppercase text-gray-400 hover:text-blue-600 transition-colors shadow-sm mr-2"
+              >
+                Reset
+              </button>
+
+              <button 
+                onClick={() => {
+                  const mainWidth = document.querySelector('main')?.clientWidth || 1000;
+                  const newZoom = (mainWidth - 80) / nativeDimensions.width;
+                  handleZoom(newZoom);
+                }}
+                className="px-3 py-1.5 bg-white border border-gray-100 rounded-lg text-[10px] font-black uppercase text-gray-400 hover:text-blue-600 transition-colors shadow-sm"
+              >
+                Fit Width
+              </button>
+
           </div>
 
           <div className="flex items-center gap-4">
@@ -915,14 +968,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         )}
 
         {/* Canvas Area */}
-        <main className="flex-1 overflow-auto p-4 sm:p-10 flex flex-col items-center bg-gray-100/30">
-          <div className="shadow-2xl rounded-2xl overflow-hidden h-fit bg-white border border-gray-100 mb-10 group relative">
+        <main className="flex-1 overflow-auto p-8 sm:p-12 lg:p-16 flex flex-col items-center bg-[#f8fafc] scroll-smooth">
+          <div className="shadow-2xl rounded-2xl overflow-hidden h-fit bg-white border border-gray-100 mb-20 group relative transition-all duration-300 transform-gpu">
             <canvas ref={canvasRef} />
             
             {/* If no content / placeholder look from image */}
             {isPreviewMode && !submission?.markupData && !material?.description && (
-              <div className="absolute inset-0 bg-gray-50/50 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-                 <div className="max-w-md bg-white p-12 rounded-[32px] text-center shadow-xl border border-gray-100">
+              <div className="absolute inset-0 bg-gray-50/50 backdrop-blur-sm flex items-center justify-center pointer-events-none p-10">
+                 <div className="max-w-md bg-white p-12 rounded-[32px] text-center shadow-2xl border border-gray-100 z-10">
                     <div className="w-20 h-20 bg-gray-50 rounded-3xl mx-auto mb-6 flex items-center justify-center">
                        <Target className="w-10 h-10 text-gray-300" />
                     </div>
