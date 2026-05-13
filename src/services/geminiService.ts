@@ -35,7 +35,7 @@ export const detectAnswerChoices = async (imageData: string): Promise<DetectedCh
     For each detection, provide:
     - label: String. The text associated with the marker (e.g. "a", "b", "c", "d" or "Question 1"). If it's a blank box with no label, leave as empty string.
     - x, y: Number. Normalized coordinates (0 to 1) for the EXACT center of the detected marker or text area.
-    - width, height: Number. Normalized width and height (0 to 1) of the detected marker or text field area. Use the actual dimensions of the box or line.
+    - width, height: Number. Normalized width and height (0 to 1) of ONLY the marker or field. For a choice (like a letter or bubble), this should be very small (e.g. 0.05). For a text line, it is the width of that specific line. Do NOT include nearby questions or other options in these dimensions.
     - type: String. "choice" for bubbles/letters/boxes to be clicked, or "text-response" for lines/areas to be typed in.
     - isCorrect: Boolean. Only mark as true if there is a CLEAR visual indicator (circle, check, bold, etc.) that this is the correct answer. Default to false.
     

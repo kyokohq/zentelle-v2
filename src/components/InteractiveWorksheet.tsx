@@ -568,24 +568,33 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           height = det.height * nativeDimensions.height;
         }
         
+        // Calculate type first to use in size logic
+        const finalType = det.type === 'text-response' ? 'text-response' : (det.isCorrect ? 'correct' : 'incorrect');
+        
         // Ensure minimum size for interaction
         width = Math.max(width, 30);
         height = Math.max(height, 30);
+        
+        // Guardrails: prevent answer choice markers from being huge
+        if (finalType !== 'text-response') {
+          width = Math.min(width, 100);
+          height = Math.min(height, 100);
+        } else {
+          // Even for text fields, cap the height to prevent vertical bars
+          height = Math.min(height, 80); 
+        }
 
-        let type = 'info' as HotspotData['type'];
+        let type = finalType as HotspotData['type'];
         let fill = 'rgba(0, 66, 117, 0.2)';
         let stroke = '#004275';
 
-        if (det.type === 'text-response') {
-          type = 'text-response';
-          fill = 'rgba(59, 130, 246, 0.15)'; // Blue tint for text fields
+        if (finalType === 'text-response') {
+          fill = 'rgba(59, 130, 246, 0.15)'; 
           stroke = '#3b82f6';
-        } else if (det.isCorrect) {
-          type = 'correct';
+        } else if (finalType === 'correct') {
           fill = 'rgba(34, 197, 94, 0.2)';
           stroke = '#16a34a';
         } else {
-          type = 'incorrect';
           fill = 'rgba(239, 68, 68, 0.2)';
           stroke = '#dc2626';
         }
