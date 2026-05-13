@@ -19,17 +19,20 @@ export const detectAnswerChoices = async (imageData: string): Promise<DetectedCh
   const model = "gemini-3-flash-preview";
   
   const prompt = `
-    Analyze this worksheet image. Detect:
-    1. Answer choice markings such as "a)", "b)", "(1)", "[ ]", "A.", etc.
-    2. Text entry areas such as blank lines (_______), empty boxes, or specific areas labeled for answers.
+    Analyze this worksheet image. You are an expert at identifying educational assessment markers. 
+    Detect:
+    1. Multiple-choice markers like "a)", "b)", "A.", "(1)", "[ ]", circles, or checkboxes next to text.
+    2. Answer fields like underline blanks "_______", empty boxes "☐", or rectangular regions intended for text entry.
+    
+    CRITICAL: Only identify markers that are clearly part of a test or worksheet structure. Avoid random text or decorative images.
     
     For each detection, provide:
-    - label: the label text (e.g. "a", "q1", or "" for just a box)
-    - x, y: normalized coordinates (0-1) for the center of the detection.
-    - type: must be either "choice" or "text-response".
-    - isCorrect: (for "choice" only) if specifically marked as correct in the image.
+    - label: String. The text label (e.g. "a", "b", "c", "d" or "q1"). If it's a blank box, leave as empty string or "blank".
+    - x, y: Number. Normalized coordinates (0 to 1) for the EXACT center of the marker (e.g. the center of the checkbox or the letter 'a').
+    - type: String. "choice" for bubbles/letters/boxes to be clicked, or "text-response" for lines/areas to be typed in.
+    - isCorrect: Boolean. Only mark as true if there is a CLEAR visual indicator (circle, check, bold, etc.) that this is the correct answer. Default to false.
     
-    Return as a JSON array.
+    Return as a JSON array sorted from top-to-bottom, left-to-right.
   `;
 
   const response = await ai.models.generateContent({

@@ -502,19 +502,48 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
 
   const handleDetectAnswers = async () => {
     if (!fabricCanvas || isDetecting) return;
+    
+    // Check if an area is selected to use as target
+    const activeObject = fabricCanvas.getActiveObject();
+    let cropRect: { left: number, top: number, width: number, height: number } | null = null;
+    
+    if (activeObject && activeObject.type === 'rect') {
+      cropRect = {
+        left: activeObject.left!,
+        top: activeObject.top!,
+        width: activeObject.width! * activeObject.scaleX!,
+        height: activeObject.height! * activeObject.scaleY!
+      };
+    }
+
     setIsDetecting(true);
     try {
       // Temporarily hide objects to capture background only
       const objects = fabricCanvas.getObjects();
       objects.forEach(obj => obj.visible = false);
+      
+      // If we have a crop rect, temporarily show it so we can see what we're detecting if we wanted, 
+      // but usually we want to hide it to see the text underneath
       fabricCanvas.renderAll();
 
-      // Capture canvas as data URL at native resolution if possible
-      const dataUrl = fabricCanvas.toDataURL({
-        format: 'png',
-        quality: 1,
-        multiplier: 1 / fabricCanvas.getZoom()
-      });
+      let dataUrl: string;
+      if (cropRect) {
+        // Capture only the cropped area
+        dataUrl = fabricCanvas.toDataURL({
+          format: 'png',
+          left: cropRect.left,
+          top: cropRect.top,
+          width: cropRect.width,
+          height: cropRect.height,
+          multiplier: 1 / fabricCanvas.getZoom()
+        });
+      } else {
+        dataUrl = fabricCanvas.toDataURL({
+          format: 'png',
+          quality: 1,
+          multiplier: 1 / fabricCanvas.getZoom()
+        });
+      }
 
       // Restore objects
       objects.forEach(obj => obj.visible = true);
@@ -523,8 +552,16 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       const detections = await detectAnswerChoices(dataUrl);
       
       detections.forEach(det => {
-        const left = det.x * nativeDimensions.width;
-        const top = det.y * nativeDimensions.height;
+        let left: number, top: number;
+        
+        if (cropRect) {
+          // Map local crop coordinates back to global canvas coordinates
+          left = cropRect.left + (det.x * cropRect.width);
+          top = cropRect.top + (det.y * cropRect.height);
+        } else {
+          left = det.x * nativeDimensions.width;
+          top = det.y * nativeDimensions.height;
+        }
         
         let type = 'info' as HotspotData['type'];
         let fill = 'rgba(0, 66, 117, 0.2)';
@@ -570,9 +607,17 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       });
 
       fabricCanvas.requestRenderAll();
-      alert(`AI detected ${detections.length} answer choices.`);
+      
+      if (cropRect) {
+        // Delete the selection box used for detection
+        fabricCanvas.remove(activeObject!);
+        fabricCanvas.discardActiveObject();
+      }
+
+      alert(`AI detected ${detections.length} total markers.`);
     } catch (error) {
       console.error("AI Detection Error:", error);
+      alert("AI Detection failed. Try selecting a smaller area or check your connection.");
     } finally {
       setIsDetecting(false);
     }
@@ -1220,7 +1265,8 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
                   active={isDetecting} 
                   onClick={handleDetectAnswers} 
                   icon={isDetecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <SearchIcon className="w-5 h-5" />} 
-                  label={isDetecting ? "Processing..." : "Detect Answers"} 
+                  label={isDetecting ? "Processing..." : "AI Detect"} 
+                  subLabel="Tip: Draw a box to scan specific area"
                 />
                 <ToolBtnSquare 
                   active={showQuizModal} 
@@ -1703,7 +1749,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   );
 }
 
-function ToolBtnSquare({ active, onClick, icon, label, isNew }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, isNew?: boolean }) {
+function ToolBtnSquare({ active, onClick, icon, label, isNew, subLabel }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, isNew?: boolean, subLabel?: string }) {
   return (
     <button 
       onClick={onClick}
@@ -1719,9 +1765,16 @@ function ToolBtnSquare({ active, onClick, icon, label, isNew }: { active: boolea
       <div className={`transition-all duration-300 ${active ? 'text-blue-600 scale-110' : 'text-gray-400 group-hover:text-blue-500'}`}>
         {icon}
       </div>
-      <span className={`text-[10px] font-bold transition-all duration-300 ${active ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600'}`}>
-        {label}
-      </span>
+      <div className="flex flex-col items-center">
+        <span className={`text-[10px] font-bold transition-all duration-300 ${active ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600'}`}>
+          {label}
+        </span>
+        {subLabel && (
+          <span className="text-[7px] text-gray-300 font-bold max-w-[80px] text-center leading-tight">
+            {subLabel}
+          </span>
+        )}
+      </div>
     </button>
   );
 }
