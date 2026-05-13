@@ -12,22 +12,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { db, auth } from '../firebase';
 import { Staident, Material, Submission, UserProfile, QuizQuestion, QuizSubmission, Type } from '../types';
-
-// Helper for AI proxy calls
-async function callAIProxy(prompt: string, config?: any, model?: string) {
-  const response = await fetch('/api/ai/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, config, model })
-  });
-  
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || 'AI Proxy Error');
-  }
-  
-  return await response.json();
-}
+import { callGemini, extractJSON } from '../lib/gemini';
 
 const PERSONALITIES = [
   "Curious and eager to learn, but sometimes overthinks simple questions.",
@@ -127,8 +112,7 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await callAIProxy(prompt, null, "gemini-3-flash-preview");
-      
+      const response = await callGemini(prompt, null, "gemini-3-flash-preview");
       return response.text || "I tried my best but was a bit confused by the prompt.";
     } catch (error) {
       console.error("Gemini Error:", error);
@@ -162,7 +146,7 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await callAIProxy(prompt, {
+      const response = await callGemini(prompt, {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
@@ -182,7 +166,7 @@ export const StaidentService = {
         }
       }, "gemini-3-flash-preview");
       
-      const objects = JSON.parse(response.text || "[]");
+      const objects = extractJSON(response.text) || [];
       // Add version and background container expected by Fabric 6 JSON
       return JSON.stringify({
         version: "6.0.0",
@@ -219,7 +203,7 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await callAIProxy(prompt, {
+      const response = await callGemini(prompt, {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -227,7 +211,7 @@ export const StaidentService = {
         }
       }, "gemini-3-flash-preview");
       
-      return JSON.parse(response.text || "{}");
+      return extractJSON(response.text) || {};
     } catch (error) {
       console.error("Gemini Quiz Error:", error);
       return {};
@@ -361,8 +345,7 @@ export const StaidentService = {
     `;
 
     try {
-      const response = await callAIProxy(prompt, null, "gemini-3-flash-preview");
-      
+      const response = await callGemini(prompt, null, "gemini-3-flash-preview");
       return response.text || "I'm not sure how to respond to that.";
     } catch (error) {
       console.error("Gemini Error:", error);

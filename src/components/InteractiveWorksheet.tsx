@@ -402,21 +402,20 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
               setHotspotInfo(data.content);
             } else if (data.type === 'correct' || data.type === 'incorrect') {
               // Visual feedback
+              const rect = hotspot.item ? hotspot.item(0) : hotspot;
               if (data.type === 'correct') {
-                hotspot.set('fill', 'rgba(34, 197, 94, 0.6)');
-                hotspot.set('stroke', '#22c55e');
+                rect.set('fill', 'rgba(34, 197, 94, 0.6)');
+                rect.set('stroke', '#22c55e');
               } else {
-                hotspot.set('fill', 'rgba(239, 68, 68, 0.6)');
-                hotspot.set('stroke', '#ef4444');
+                rect.set('fill', 'rgba(239, 68, 68, 0.6)');
+                rect.set('stroke', '#ef4444');
               }
               canvas.renderAll();
             } else if (data.type === 'text-response') {
-              const response = prompt("Enter your answer:", data.content || "");
+              const response = prompt("Enter your answer:", data.content === 'Double click to type...' ? '' : data.content);
               if (response !== null) {
                 hotspot.hotspotData = { ...data, content: response };
-                hotspot.set('stroke', '#004275');
-                hotspot.set('strokeWidth', 3);
-                canvas.renderAll();
+                updateHotspotVisuals(hotspot);
               }
             }
           }
@@ -433,6 +432,34 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       isInitializing.current = false;
     }
   }, [loading, material]);
+
+  const updateHotspotVisuals = (hotspot: any) => {
+    if (!hotspot || !hotspot.isHotspot) return;
+    const data = hotspot.hotspotData as HotspotData;
+    
+    let fill = 'rgba(0, 66, 117, 0.2)';
+    let stroke = '#004275';
+    if (data.type === 'correct') { fill = 'rgba(34, 197, 94, 0.3)'; stroke = '#16a34a'; }
+    if (data.type === 'incorrect') { fill = 'rgba(239, 68, 68, 0.3)'; stroke = '#dc2626'; }
+    if (data.type === 'text-response') { fill = 'rgba(59, 130, 246, 0.15)'; stroke = '#3b82f6'; }
+    
+    if (hotspot instanceof fabric.Group) {
+      const rect = hotspot.item(0) as fabric.Rect;
+      const label = hotspot.item(1) as fabric.IText;
+      if (rect) rect.set({ fill, stroke });
+      if (label) {
+        label.set({ 
+          text: data.content || '', 
+          fill: stroke,
+          fontSize: Math.min(rect.width! * rect.scaleX! * 0.8, rect.height! * rect.scaleY! * 0.8, 14)
+        });
+      }
+    } else {
+      hotspot.set({ fill, stroke });
+    }
+    
+    fabricCanvas?.renderAll();
+  };
 
   const quickAddHotspot = () => {
     if (!fabricCanvas || isActuallyStudent) return;
@@ -462,9 +489,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     if (lastType === 'incorrect') { fill = 'rgba(239, 68, 68, 0.2)'; stroke = '#dc2626'; }
     if (lastType === 'text-response') { fill = 'rgba(249, 115, 22, 0.2)'; stroke = '#ea580c'; }
 
-    const hotspot = new fabric.Rect({
-      left,
-      top,
+    const rect = new fabric.Rect({
       width: 40,
       height: 40,
       fill,
@@ -472,6 +497,22 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       strokeWidth: 2,
       rx: 8,
       ry: 8,
+      originX: 'center',
+      originY: 'center'
+    });
+
+    const label = new fabric.IText('', {
+      fontSize: 14,
+      fontFamily: 'Inter',
+      fontWeight: 'bold',
+      fill: stroke,
+      originX: 'center',
+      originY: 'center'
+    });
+
+    const hotspot = new fabric.Group([rect, label], {
+      left,
+      top,
       transparentCorners: false,
       cornerColor: stroke,
       cornerSize: 10,
@@ -488,6 +529,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     fabricCanvas.setActiveObject(hotspot);
     setSelectedHotspot(hotspot);
     fabricCanvas.requestRenderAll();
+    updateHotspotVisuals(hotspot);
 
     // Scroll viewport if new hotspot is out of view
     const vpt = fabricCanvas.viewportTransform!;
@@ -498,6 +540,16 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     if (zoomedTop > canvasHeight - 100) {
       vpt[5] -= (zoomedTop - (canvasHeight / 2));
       fabricCanvas.requestRenderAll();
+    }
+  };
+
+  const handleClearDetections = () => {
+    if (!fabricCanvas || isActuallyStudent) return;
+    if (confirm("Clear all detected markers and hotspots?")) {
+      const hotspots = fabricCanvas.getObjects().filter(obj => (obj as any).isHotspot);
+      fabricCanvas.remove(...hotspots);
+      setSelectedHotspot(null);
+      fabricCanvas.renderAll();
     }
   };
 
@@ -592,16 +644,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           fill = 'rgba(59, 130, 246, 0.15)'; 
           stroke = '#3b82f6';
         } else if (finalType === 'correct') {
-          fill = 'rgba(34, 197, 94, 0.2)';
+          fill = 'rgba(34, 197, 94, 0.3)';
           stroke = '#16a34a';
         } else {
-          fill = 'rgba(239, 68, 68, 0.2)';
+          fill = 'rgba(239, 68, 68, 0.3)';
           stroke = '#dc2626';
         }
 
-        const hotspot = new fabric.Rect({
-          left: left - (width / 2),
-          top: top - (height / 2),
+        const rect = new fabric.Rect({
           width: width,
           height: height,
           fill,
@@ -609,9 +659,26 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           strokeWidth: 2,
           rx: 6,
           ry: 6,
+          originX: 'center',
+          originY: 'center'
+        });
+
+        const label = new fabric.IText(det.label || '', {
+          fontSize: Math.min(width, height, 14),
+          fontFamily: 'Inter',
+          fontWeight: 'bold',
+          fill: stroke,
+          originX: 'center',
+          originY: 'center'
+        });
+
+        const hotspot = new fabric.Group([rect, label], {
+          left: left - (width / 2),
+          top: top - (height / 2),
           transparentCorners: false,
           cornerColor: stroke,
           cornerSize: 8,
+          selectable: !isActuallyStudent,
         });
 
         (hotspot as any).isHotspot = true;
@@ -863,9 +930,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       fabricCanvas.setActiveObject(rect);
       setActiveTool('select');
     } else if (tool === 'hotspot') {
-      const hotspot = new fabric.Rect({
-        left: 200,
-        top: 200,
+      const rect = new fabric.Rect({
         width: 40,
         height: 40,
         fill: 'rgba(0, 66, 117, 0.2)',
@@ -873,11 +938,24 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         strokeWidth: 2,
         rx: 8,
         ry: 8,
+        originX: 'center',
+        originY: 'center'
+      });
+      const label = new fabric.IText('', {
+        fontSize: 14,
+        fontFamily: 'Inter',
+        fontWeight: 'bold',
+        fill: '#004275',
+        originX: 'center',
+        originY: 'center'
+      });
+      const hotspot = new fabric.Group([rect, label], {
+        left: 200,
+        top: 200,
         transparentCorners: false,
         cornerColor: '#004275',
-        cornerSize: 10,
+        cornerSize: 10
       });
-      // Add custom property for metadata
       (hotspot as any).isHotspot = true;
       (hotspot as any).hotspotData = {
         type: 'info',
@@ -888,7 +966,8 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       fabricCanvas.setActiveObject(hotspot);
       setSelectedHotspot(hotspot);
       setActiveTool('select');
-    } else if (tool === 'check') {
+    }
+ else if (tool === 'check') {
       const check = new fabric.IText('✓', {
         left: 200,
         top: 200,
@@ -1138,14 +1217,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     const data = (selectedHotspot as any).hotspotData as HotspotData;
     (selectedHotspot as any).hotspotData = { ...data, type };
     
-    // Update visual style based on type for teacher view
-    let color = 'rgba(0, 66, 117, 0.2)';
-    if (type === 'correct') color = 'rgba(34, 197, 94, 0.2)';
-    if (type === 'incorrect') color = 'rgba(239, 68, 68, 0.2)';
-    if (type === 'text-response') color = 'rgba(249, 115, 22, 0.2)';
-    
-    selectedHotspot.set('fill', color);
-    fabricCanvas?.renderAll();
+    updateHotspotVisuals(selectedHotspot);
     setUpdateVersion(v => v + 1);
   };
 
@@ -1320,6 +1392,12 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
                     icon={isDetecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <SearchIcon className="w-5 h-5" />} 
                     label={isDetecting ? "Processing..." : "AI Detect"} 
                     subLabel="Tip: Draw a box to scan specific area"
+                  />
+                  <ToolBtnSquare 
+                    active={false} 
+                    onClick={handleClearDetections} 
+                    icon={<Trash2 className="w-5 h-5" />} 
+                    label="Clear All" 
                   />
                   <ToolBtnSquare 
                     active={showQuizModal} 
@@ -1571,7 +1649,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
                       onChange={(e) => {
                         const data = (selectedHotspot as any).hotspotData;
                         (selectedHotspot as any).hotspotData = { ...data, content: e.target.value };
-                        fabricCanvas?.renderAll();
+                        updateHotspotVisuals(selectedHotspot);
                         setUpdateVersion(v => v + 1);
                       }}
                       placeholder="Enter hotspot text, feedback, or instructions..."

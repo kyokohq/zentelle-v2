@@ -138,31 +138,6 @@ async function startServer() {
     }
   });
 
-  // Gemini AI Proxy Route
-  app.post("/api/ai/generate", async (req, res) => {
-    const { prompt, config, model } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      console.error("GEMINI_API_KEY is missing in environment variables");
-      return res.status(500).json({ error: "Gemini API key not configured on server" });
-    }
-
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: model || "gemini-3-flash-preview",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: config
-      });
-      
-      res.json({ text: response.text });
-    } catch (error: any) {
-      console.error("Gemini Server Error:", error);
-      res.status(500).json({ error: error.message || "Failed to generate content from AI" });
-    }
-  });
-
   // Health check route
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });

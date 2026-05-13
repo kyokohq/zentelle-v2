@@ -1,6 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+import { Type } from "@google/genai";
+import { callGemini, extractJSON } from "../lib/gemini";
 
 export interface DetectedChoice {
   label: string;
@@ -18,8 +17,6 @@ export interface QuizQuestion {
 }
 
 export const detectAnswerChoices = async (imageData: string): Promise<DetectedChoice[]> => {
-  const model = "gemini-3-flash-preview";
-  
   const prompt = `
     Analyze this worksheet image. You are an expert at identifying educational assessment markers. 
     Detect precisely:
@@ -33,24 +30,20 @@ export const detectAnswerChoices = async (imageData: string): Promise<DetectedCh
     - If unsure if something is a marker, do NOT include it.
     
     For each detection, provide:
-    - label: String. The text associated with the marker (e.g. "a", "b", "c", "d" or "Question 1"). If it's a blank box with no label, leave as empty string.
-    - x, y: Number. Normalized coordinates (0 to 1) for the EXACT center of the detected marker or text area.
-    - width, height: Number. Normalized width and height (0 to 1) of ONLY the marker or field. For a choice (like a letter or bubble), this should be very small (e.g. 0.05). For a text line, it is the width of that specific line. Do NOT include nearby questions or other options in these dimensions.
+    - label: String. The text label (e.g. "a", "A.", "1.", "Choose...").
+    - x, y: Number. Normalized coordinates (0 to 1) for the EXACT center of the marker or target area.
+    - width, height: Number. Normalized width and height (0 to 1). 
+      - For multiple choice bubbles/letters: These should be VERY TIGHT around the marker (e.g., 0.02 to 0.04).
+      - For text response areas: These should cover the blank line or box (e.g., width 0.1 to 0.3, height 0.02 to 0.04).
+      - CRITICAL: Do NOT include the question text or other nearby options in the dimensions. 
     - type: String. "choice" for bubbles/letters/boxes to be clicked, or "text-response" for lines/areas to be typed in.
     - isCorrect: Boolean. Only mark as true if there is a CLEAR visual indicator (circle, check, bold, etc.) that this is the correct answer. Default to false.
     
     Return as a JSON array sorted from top-to-bottom, left-to-right.
   `;
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: {
-      parts: [
-        { inlineData: { data: imageData.split(',')[1], mimeType: "image/png" } },
-        { text: prompt }
-      ]
-    },
-    config: {
+  try {
+    const response = await callGemini(prompt, {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
@@ -68,14 +61,12 @@ export const detectAnswerChoices = async (imageData: string): Promise<DetectedCh
           required: ["label", "x", "y", "width", "height", "type"]
         }
       }
-    }
-  });
+    }, "gemini-3-flash-preview", imageData);
 
-  try {
-    return JSON.parse(response.text || "[]");
-  } catch (e) {
-    console.error("Error parsing Gemini response:", e);
-    return [];
+    return extractJSON(response.text) || [];
+  } catch (e: any) {
+    console.error("Gemini Error (detectAnswerChoices):", e);
+    throw e;
   }
 };
 
@@ -85,8 +76,6 @@ export const generateQuizItems = async (
   numOptions: number,
   type: 'multiple-choice' | 'true-false' | 'text'
 ): Promise<QuizQuestion[]> => {
-  const model = "gemini-3-flash-preview";
-  
   const prompt = `
     Create a quiz based on the topic: "${materialTitle}".
     Generate ${numQuestions} questions.
@@ -97,10 +86,8 @@ export const generateQuizItems = async (
     Return the result as a JSON array of objects with "question" and "choices" (where each choice has "label", "text", and "isCorrect").
   `;
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: prompt,
-    config: {
+  try {
+    const response = await callGemini(prompt, {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
@@ -124,13 +111,11 @@ export const generateQuizItems = async (
           required: ["question", "choices"]
         }
       }
-    }
-  });
+    });
 
-  try {
-    return JSON.parse(response.text || "[]");
-  } catch (e) {
-    console.error("Error parsing Gemini response:", e);
-    return [];
+    return extractJSON(response.text) || [];
+  } catch (e: any) {
+    console.error("Gemini Error (generateQuizItems):", e);
+    throw e;
   }
 };
