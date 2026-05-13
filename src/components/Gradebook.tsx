@@ -9,7 +9,8 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Material, Submission, UserProfile, Enrollment, OperationType } from '../types';
+import { Material, Submission, UserProfile, Enrollment } from '../types';
+import { handleFirestoreError, OperationType } from '../lib/utils';
 import { motion } from 'motion/react';
 import { 
   Search, 
@@ -30,20 +31,7 @@ import {
 } from 'lucide-react';
 import { StaidentService } from '../services/staidentService';
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
+// Gradebook Component
 interface GradebookProps {
   courseId: string;
   isAdmin: boolean;
@@ -68,14 +56,41 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
     // Fetch enrollments to get students
     const qEnrollments = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
     const unsubEnrollments = onSnapshot(qEnrollments, async (snapshot) => {
-      const studentIds = snapshot.docs
-        .map(doc => doc.data().uid)
-        .filter(id => id && typeof id === 'string');
-      
-      if (studentIds.length === 0) {
-        setStudents([]);
+      try {
+        const studentIds = snapshot.docs
+          .map(doc => doc.data().uid)
+          .filter(id => id && typeof id === 'string');
         
-        // Even if no students, we still want to fetch Staidents
+        if (studentIds.length === 0) {
+          setStudents([]);
+          
+          // Even if no students, we still want to fetch Staidents
+          const staidentsSnap = await getDocs(query(collection(db, 'staidents'), where('courseId', '==', courseId)));
+          const staidentProfiles = staidentsSnap.docs.map(doc => {
+            const data = doc.data();
+            return {
+              uid: `staident_${doc.id}`,
+              displayName: data.name,
+              email: 'AI Practice Student',
+              role: 'student',
+              photoURL: null
+            } as any;
+          });
+          setStudents(staidentProfiles);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch user profiles for these students
+        const studentProfiles: UserProfile[] = [];
+        for (const uid of studentIds) {
+          const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', uid)));
+          if (!userDoc.empty) {
+            studentProfiles.push({ id: userDoc.docs[0].id, ...userDoc.docs[0].data() } as any);
+          }
+        }
+
+        // Fetch Staidents for this course
         const staidentsSnap = await getDocs(query(collection(db, 'staidents'), where('courseId', '==', courseId)));
         const staidentProfiles = staidentsSnap.docs.map(doc => {
           const data = doc.data();
@@ -87,35 +102,12 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
             photoURL: null
           } as any;
         });
-        setStudents(staidentProfiles);
-        setLoading(false);
-        return;
+
+        setStudents([...studentProfiles, ...staidentProfiles]);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, 'gradebook/students');
       }
-
-      // Fetch user profiles for these students
-      const studentProfiles: UserProfile[] = [];
-      for (const uid of studentIds) {
-        const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', uid)));
-        if (!userDoc.empty) {
-          studentProfiles.push({ id: userDoc.docs[0].id, ...userDoc.docs[0].data() } as any);
-        }
-      }
-
-      // Fetch Staidents for this course
-      const staidentsSnap = await getDocs(query(collection(db, 'staidents'), where('courseId', '==', courseId)));
-      const staidentProfiles = staidentsSnap.docs.map(doc => {
-        const data = doc.data();
-        return {
-          uid: `staident_${doc.id}`,
-          displayName: data.name,
-          email: 'AI Practice Student',
-          role: 'student',
-          photoURL: null
-        } as any;
-      });
-
-      setStudents([...studentProfiles, ...staidentProfiles]);
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments'));
 
     // Fetch assignments
     const qAssignments = query(
@@ -125,14 +117,14 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
     );
     const unsubAssignments = onSnapshot(qAssignments, (snapshot) => {
       setAssignments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Material)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'materials/assignments'));
 
     // Fetch all submissions for this course's assignments
     const qSubmissions = query(collection(db, 'submissions')); // We'll filter in memory or better yet, fetch per assignment if needed
     // Actually, we should probably have courseId on submissions too, but we can filter by materialId
     const unsubSubmissions = onSnapshot(qSubmissions, (snapshot) => {
       setSubmissions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Submission)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'submissions'));
 
     setLoading(false);
 

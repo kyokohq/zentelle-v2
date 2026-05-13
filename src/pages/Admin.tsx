@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { School, UserProfile, Staident } from '../types';
+import { handleFirestoreError, OperationType } from '../lib/utils';
 import { 
   Shield, 
   School as SchoolIcon, 
@@ -137,7 +138,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
 
     const unsubSchools = onSnapshot(schoolsQuery, (snapshot) => {
       setSchools(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as School)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'schools'));
 
     let usersQuery = query(collection(db, 'users'));
     if (!isSuperAdmin && currentSchoolId) {
@@ -150,7 +151,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
 
     const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ ...doc.data() } as UserProfile)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'users'));
 
     // Fetch Staidents for SIS
     let staidentsQuery = query(collection(db, 'staidents'));
@@ -160,7 +161,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
 
     const unsubStaidents = onSnapshot(staidentsQuery, (snapshot) => {
       setStaidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Staident)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'staidents'));
 
     // Attendance/Discipline filters
     let attendanceQuery = query(collection(db, 'attendance'));
@@ -173,11 +174,11 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
 
     const unsubAttendance = onSnapshot(attendanceQuery, (snapshot) => {
       setAttendance(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'attendance'));
 
     const unsubDiscipline = onSnapshot(disciplineQuery, (snapshot) => {
       setReferrals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'discipline'));
 
     setLoading(false);
 
@@ -216,7 +217,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
       setShowSchoolModal(false);
       setEditingSchool(null);
     } catch (error) {
-      console.error("Error saving school:", error);
+      handleFirestoreError(error, editingSchool ? OperationType.UPDATE : OperationType.CREATE, editingSchool ? `schools/${editingSchool.id}` : 'schools');
     }
   };
 
@@ -229,7 +230,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
       try {
         await deleteDoc(doc(db, 'schools', id));
       } catch (error) {
-        console.error("Error deleting school:", error);
+        handleFirestoreError(error, OperationType.DELETE, `schools/${id}`);
       }
     }
   };
@@ -273,7 +274,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
       await setDoc(doc(db, 'users', mockUid), userData);
       setShowAddUserModal(false);
     } catch (error) {
-      console.error("Error creating user:", error);
+      handleFirestoreError(error, OperationType.CREATE, 'users');
     }
   };
 
@@ -309,7 +310,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
       setShowUserModal(false);
       setEditingUser(null);
     } catch (error) {
-      console.error("Error updating user:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `users/${editingUser.uid}`);
     }
   };
 
@@ -326,8 +327,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
       alert("Student/User removed successfully.");
       if (showStudentModal) setShowStudentModal(false);
     } catch (error) {
-      console.error("Error deleting user:", error);
-      alert("Failed to delete. Check console for permissions.");
+      handleFirestoreError(error, OperationType.DELETE, isStaident ? 'staidents' : 'users');
     }
   };
 
@@ -346,7 +346,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
         recordedBy: currentUserId
       });
     } catch (error) {
-      console.error("Error taking attendance:", error);
+      handleFirestoreError(error, OperationType.WRITE, `attendance/${attendanceId}`);
     }
   };
 
@@ -376,7 +376,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
       }
       setEditingReferral(null);
     } catch (error) {
-      console.error("Error saving discipline:", error);
+      handleFirestoreError(error, editingReferral ? OperationType.UPDATE : OperationType.CREATE, 'discipline');
     }
   };
 
@@ -386,7 +386,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
         await deleteDoc(doc(db, 'discipline', id));
         alert("Referral deleted successfully.");
       } catch (error) {
-        console.error("Error deleting referral:", error);
+        handleFirestoreError(error, OperationType.DELETE, `discipline/${id}`);
       }
     }
   };

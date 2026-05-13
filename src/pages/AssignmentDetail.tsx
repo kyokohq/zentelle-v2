@@ -43,6 +43,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Material, Submission } from '../types';
+import { handleFirestoreError, OperationType } from '../lib/utils';
 import { QuizPlayer } from '../components/QuizPlayer';
 import { InteractiveWorksheet } from '../components/InteractiveWorksheet';
 import { QuizCreator } from '../components/QuizCreator';
@@ -112,19 +113,24 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
     if (!assignmentId) return;
 
     const fetchAssignment = async () => {
-      const docRef = doc(db, 'materials', assignmentId);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        const data = { id: snap.id, ...snap.data() } as Material;
-        if (!isAdmin && !data.published) {
-          setError("This assignment is currently unpublished and hidden from students.");
+      try {
+        const docRef = doc(db, 'materials', assignmentId);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = { id: snap.id, ...snap.data() } as Material;
+          if (!isAdmin && !data.published) {
+            setError("This assignment is currently unpublished and hidden from students.");
+          } else {
+            setAssignment(data);
+          }
         } else {
-          setAssignment(data);
+          setError("Assignment not found");
         }
-      } else {
-        setError("Assignment not found");
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, `materials/${assignmentId}`);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchAssignment();
@@ -140,7 +146,7 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
         if (!snapshot.empty) {
           setSubmission({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Submission);
         }
-      });
+      }, (err) => handleFirestoreError(err, OperationType.LIST, 'submissions'));
 
       return () => unsubscribe();
     }
@@ -183,8 +189,7 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
       await addDoc(collection(db, 'submissions'), submissionData);
       
     } catch (err: any) {
-      setError(err.message || "Failed to create Google Drive copy. Please ensure you have connected your Google account.");
-      console.error(err);
+      handleFirestoreError(err, OperationType.CREATE, 'submissions');
     } finally {
       setCopying(false);
     }
@@ -218,7 +223,7 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
         submittedAt: serverTimestamp()
       });
     } catch (err: any) {
-      setError(err.message || "Failed to submit assignment.");
+      handleFirestoreError(err, OperationType.UPDATE, `submissions/${submission.id}`);
     } finally {
       setSubmitting(false);
     }
@@ -262,7 +267,7 @@ export default function AssignmentDetail({ userRole }: { userRole?: string }) {
       setTextSubmission('');
       setSelectedFile(null);
     } catch (err: any) {
-      setError(err.message || "Failed to submit assignment.");
+      handleFirestoreError(err, submission ? OperationType.UPDATE : OperationType.CREATE, submission ? `submissions/${submission.id}` : 'submissions');
     } finally {
       setSubmitting(false);
     }

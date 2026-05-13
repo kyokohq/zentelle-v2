@@ -35,10 +35,9 @@ import {
   Group, 
   Resource,
   School,
-  OperationType, 
-  FirestoreErrorInfo,
   UserProfile
 } from './types';
+import { handleFirestoreError, OperationType } from './lib/utils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { Auth } from './components/Auth';
@@ -56,30 +55,7 @@ import Materials from './pages/Materials';
 import AssignmentDetail from './pages/AssignmentDetail';
 import { Loader2, LogIn, X, Plus } from 'lucide-react';
 
-// --- Error Handling ---
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
+// Zentelle App Entry
 export default function App() {
   return (
     <ErrorBoundary>
@@ -266,7 +242,7 @@ function ZentelleApp() {
         } else {
           setUserSchool(null);
         }
-      });
+      }, (err) => handleFirestoreError(err, OperationType.GET, `schools/${userProfile.schoolId}`));
       return () => unsub();
     } else {
       setUserSchool(null);

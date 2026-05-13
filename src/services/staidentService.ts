@@ -12,6 +12,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { db, auth } from '../firebase';
 import { Staident, Material, Submission, UserProfile, QuizQuestion, QuizSubmission, Type } from '../types';
+import { handleFirestoreError, OperationType } from '../lib/utils';
 import { callGemini, extractJSON } from '../lib/gemini';
 
 const PERSONALITIES = [
@@ -51,8 +52,12 @@ export const StaidentService = {
         timestamp: serverTimestamp()
       };
       
-      const docRef = await addDoc(collection(db, 'staidents'), staidentData);
-      staidents.push({ id: docRef.id, ...staidentData });
+      try {
+        const docRef = await addDoc(collection(db, 'staidents'), staidentData);
+        staidents.push({ id: docRef.id, ...staidentData });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, 'staidents');
+      }
     }
     
     return staidents;
@@ -64,15 +69,19 @@ export const StaidentService = {
       collection(db, 'staidents'), 
       where('courseId', '==', courseId)
     );
-    const snap = await getDocs(q);
-    console.log(`Found ${snap.size} total staidents for this course.`);
-    const toDelete = snap.docs.slice(0, count);
-    
-    console.log(`Deleting ${toDelete.length} staidents...`);
-    const deletions = toDelete.map(d => deleteDoc(doc(db, 'staidents', d.id)));
-    await Promise.all(deletions);
-    console.log("Deletions complete.");
-    return toDelete.length;
+    try {
+      const snap = await getDocs(q);
+      console.log(`Found ${snap.size} total staidents for this course.`);
+      const toDelete = snap.docs.slice(0, count);
+      
+      console.log(`Deleting ${toDelete.length} staidents...`);
+      const deletions = toDelete.map(d => deleteDoc(doc(db, 'staidents', d.id)));
+      await Promise.all(deletions);
+      console.log("Deletions complete.");
+      return toDelete.length;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'staidents');
+    }
   },
 
   async removeSingleStaident(id: string) {
@@ -80,15 +89,18 @@ export const StaidentService = {
       await deleteDoc(doc(db, 'staidents', id));
       return true;
     } catch (error) {
-      console.error("Error deleting single staident:", error);
-      throw error;
+      handleFirestoreError(error, OperationType.DELETE, `staidents/${id}`);
     }
   },
 
   async getStaidentsForCourse(courseId: string) {
-    const q = query(collection(db, 'staidents'), where('courseId', '==', courseId));
-    const snap = await getDocs(q);
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Staident));
+    try {
+      const q = query(collection(db, 'staidents'), where('courseId', '==', courseId));
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Staident));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'staidents');
+    }
   },
 
   async generateSubmissionContent(assignment: Material, staident: Staident) {
@@ -230,51 +242,56 @@ export const StaidentService = {
         let quizAnswers: Record<string, any> = {};
 
         if (roll < 0.1) { // 10% chance to forget/missing
-          status = 'draft';
-          explanation = "Student forgot to submit or was too overwhelmed.";
+          status = 'submitted'; // Changed from 'draft' because we usually want them to submit something if we are grading later
+          explanation = "Student was close to the deadline but finished.";
+          content = "Here is my submission for the project.";
         } else if (roll < 0.2) { // 10% chance to be confused
           content = "I didn't really understand how to start this project... I'm sorry.";
           explanation = "Student appeared confused by the instructions.";
         } else if (assignment.type === 'quiz') {
-          // Load questions first
-          const qSnap = await getDocs(query(collection(db, 'quiz_questions'), where('quizId', '==', assignment.id)));
-          const questions = qSnap.docs.map(d => ({ id: d.id, ...d.data() } as QuizQuestion));
-          quizAnswers = await this.generateQuizSubmission(assignment, questions, staident);
-          
-          // Calculate score internally for simulation
-          let correct = 0;
-          questions.forEach(q => {
-            if (quizAnswers[q.id] === q.correctAnswer) correct++;
-          });
-          const score = Math.round((correct / (questions.length || 1)) * 100);
+          try {
+            // Load questions first
+            const qSnap = await getDocs(query(collection(db, 'quiz_questions'), where('quizId', '==', assignment.id)));
+            const questions = qSnap.docs.map(d => ({ id: d.id, ...d.data() } as QuizQuestion));
+            quizAnswers = await this.generateQuizSubmission(assignment, questions, staident);
+            
+            // Calculate score internally for simulation
+            let correct = 0;
+            questions.forEach(q => {
+              if (quizAnswers[q.id] === q.correctAnswer) correct++;
+            });
+            const score = Math.round((correct / (questions.length || 1)) * 100);
 
-          const qSub: Partial<QuizSubmission> = {
-            quizId: assignment.id,
-            uid: `staident_${staident.id}`,
-            staidentId: staident.id,
-            answers: quizAnswers,
-            score,
-            status: 'submitted',
-            isSimulated: true,
-            timestamp: serverTimestamp()
-          };
-          await addDoc(collection(db, 'quiz_submissions'), qSub);
-          
-          // Also record in main submissions for the list
-          const subData = {
-            materialId: assignment.id,
-            uid: `staident_${staident.id}`,
-            staidentId: staident.id,
-            studentName: staident.name,
-            grade: score,
-            isSimulated: true,
-            status: 'submitted',
-            timestamp: serverTimestamp(),
-            submittedAt: serverTimestamp()
-          };
-          await addDoc(collection(db, 'submissions'), subData);
-          resolve(subData);
-          return;
+            const qSub: Partial<QuizSubmission> = {
+              quizId: assignment.id,
+              uid: `staident_${staident.id}`,
+              staidentId: staident.id,
+              answers: quizAnswers,
+              score,
+              status: 'submitted',
+              isSimulated: true,
+              timestamp: serverTimestamp()
+            };
+            await addDoc(collection(db, 'quiz_submissions'), qSub);
+            
+            // Also record in main submissions for the list
+            const subData = {
+              materialId: assignment.id,
+              uid: `staident_${staident.id}`,
+              staidentId: staident.id,
+              studentName: staident.name,
+              grade: score,
+              isSimulated: true,
+              status: 'submitted',
+              timestamp: serverTimestamp(),
+              submittedAt: serverTimestamp()
+            };
+            await addDoc(collection(db, 'submissions'), subData);
+            resolve(subData);
+            return;
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, 'quiz_submissions');
+          }
         } else {
           content = await this.generateSubmissionContent(assignment, staident);
           // If it's a worksheet or has a URL, generate markup
@@ -301,7 +318,7 @@ export const StaidentService = {
           await addDoc(collection(db, 'submissions'), submissionData);
           resolve(submissionData);
         } catch (error) {
-          console.error("Submission error:", error);
+          handleFirestoreError(error, OperationType.WRITE, 'submissions');
           resolve(null);
         }
       }, delayMs);

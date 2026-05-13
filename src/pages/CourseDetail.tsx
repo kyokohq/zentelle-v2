@@ -13,7 +13,8 @@ import {
   limit
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { Course, Activity, Resource, OperationType, Enrollment, Staident } from '../types';
+import { Course, Activity, Resource, Enrollment, Staident } from '../types';
+import { handleFirestoreError, OperationType } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import Materials from './Materials';
 import Gradebook from '../components/Gradebook';
@@ -79,7 +80,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
           setEnrollment({ id: enrollDoc.id, ...enrollDoc.data() } as Enrollment);
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        handleFirestoreError(error, OperationType.GET, `courses/${courseId}`);
       } finally {
         setLoading(false);
       }
@@ -95,7 +96,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
     );
     const unsubActivities = onSnapshot(qActivities, (snapshot) => {
       setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Activity)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'activities'));
 
     // Listen for resources (files)
     const qResources = query(
@@ -104,7 +105,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
     );
     const unsubResources = onSnapshot(qResources, (snapshot) => {
       setResources(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Resource)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'resources'));
 
     // Listen for messages (chat)
     const qMessages = query(
@@ -115,7 +116,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
     );
     const unsubMessages = onSnapshot(qMessages, (snapshot) => {
       setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'course_messages'));
 
     // Listen for staidents
     const qStaidents = query(
@@ -124,7 +125,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
     );
     const unsubStaidents = onSnapshot(qStaidents, (snapshot) => {
       setStaidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Staident)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'staidents'));
 
     return () => {
       unsubActivities();
@@ -149,7 +150,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
       });
       setNewMessage('');
     } catch (error) {
-      console.error('Error sending message:', error);
+      handleFirestoreError(error, OperationType.WRITE, 'course_messages');
     }
   };
 
@@ -499,7 +500,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
                   setShowUpdateModal(false);
                   setUpdateForm({ title: '', content: '' });
                 } catch (error) {
-                  console.error('Error posting update:', error);
+                  handleFirestoreError(error, OperationType.CREATE, 'activities');
                 }
               }} className="p-6 space-y-4">
                 <div className="space-y-2">
@@ -561,7 +562,7 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
                   setShowFileModal(false);
                   setFileForm({ title: '', category: '', type: 'pdf', url: '' });
                 } catch (error) {
-                  console.error('Error uploading resource:', error);
+                  handleFirestoreError(error, OperationType.CREATE, 'resources');
                 }
               }} className="p-6 space-y-4">
                 <div className="space-y-2">

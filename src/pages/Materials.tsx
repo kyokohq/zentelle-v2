@@ -56,6 +56,7 @@ import {
 import { db, auth } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Material, Submission } from '../types';
+import { handleFirestoreError, OperationType } from '../lib/utils';
 import {
   DndContext,
   closestCenter,
@@ -411,7 +412,7 @@ export default function Materials({
     );
     const unsub = onSnapshot(qFolders, (snap) => {
       setAllFolders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Material)));
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'materials/folders'));
     return () => unsub();
   }, [courseId, isAdmin]);
 
@@ -462,9 +463,13 @@ export default function Materials({
     // Fetch current folder if folderId is present
     if (folderId) {
       const fetchFolder = async () => {
-        const folderDoc = await getDoc(doc(db, 'materials', folderId));
-        if (folderDoc.exists()) {
-          setCurrentFolder({ id: folderDoc.id, ...folderDoc.data() } as Material);
+        try {
+          const folderDoc = await getDoc(doc(db, 'materials', folderId));
+          if (folderDoc.exists()) {
+            setCurrentFolder({ id: folderDoc.id, ...folderDoc.data() } as Material);
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `materials/${folderId}`);
         }
       };
       fetchFolder();
@@ -495,7 +500,7 @@ export default function Materials({
       const materialsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Material));
       setMaterials(materialsData);
       setLoading(false);
-    });
+    }, (err) => handleFirestoreError(err, OperationType.LIST, `materials/${folderId || 'root'}`));
 
     return () => unsubscribe();
   }, [courseId, folderId]);
@@ -531,7 +536,7 @@ export default function Materials({
       try {
         await batch.commit();
       } catch (error) {
-        console.error('Error updating material order:', error);
+        handleFirestoreError(error, OperationType.WRITE, 'materials/reorder');
       }
     }
   };
@@ -566,17 +571,21 @@ export default function Materials({
         where('courseId', '==', courseId),
         where('parentId', '==', materialData.parentId)
       );
-      const snap = await getDocs(q);
-      const existingAtLevel = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as Material))
-        .sort((a,b) => (a.order || 0) - (b.order || 0));
+      try {
+        const snap = await getDocs(q);
+        const existingAtLevel = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as Material))
+          .sort((a,b) => (a.order || 0) - (b.order || 0));
 
-      existingAtLevel.forEach((m, i) => {
-        if (i >= inlineAddIndex) {
-          batch.update(doc(db, 'materials', m.id), { order: i + 1 });
-        }
-      });
-      await batch.commit();
+        existingAtLevel.forEach((m, i) => {
+          if (i >= inlineAddIndex) {
+            batch.update(doc(db, 'materials', m.id), { order: i + 1 });
+          }
+        });
+        await batch.commit();
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, 'materials/inline-add-reorder');
+      }
     }
 
     if (newMaterialType === 'folder') {
@@ -601,7 +610,7 @@ export default function Materials({
       setShowAddModal(false);
       resetForm();
     } catch (error) {
-      console.error("Error saving material:", error);
+      handleFirestoreError(error, isEditing ? OperationType.UPDATE : OperationType.CREATE, isEditing ? `materials/${editingMaterialId}` : 'materials');
     }
   };
 
@@ -700,7 +709,7 @@ export default function Materials({
       setShowDeleteConfirm(false);
       setMaterialToDelete(null);
     } catch (error) {
-      console.error("Error deleting material:", error);
+      handleFirestoreError(error, OperationType.DELETE, `materials/${id}`);
     } finally {
       setIsDeleting(false);
     }
@@ -712,7 +721,7 @@ export default function Materials({
         published: !material.published
       });
     } catch (error) {
-      console.error("Error toggling publish status:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `materials/${material.id}`);
     }
   };
 
@@ -762,7 +771,7 @@ export default function Materials({
       );
       return onSnapshot(q, (snap) => {
         setContents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Material)));
-      });
+      }, (err) => handleFirestoreError(err, OperationType.LIST, `materials/folder/${parentId}`));
     }, [parentId]);
 
     return (
@@ -1288,7 +1297,7 @@ export default function Materials({
                     setShowMoveModal(false);
                     setMaterialToMove(null);
                   } catch (e) {
-                    console.error(e);
+                    handleFirestoreError(e, OperationType.UPDATE, `materials/${materialToMove.id}`);
                   } finally {
                     setIsMoving(false);
                   }
@@ -1318,7 +1327,7 @@ export default function Materials({
                         setShowMoveModal(false);
                         setMaterialToMove(null);
                       } catch (e) {
-                        console.error(e);
+                        handleFirestoreError(e, OperationType.UPDATE, `materials/${materialToMove.id}`);
                       } finally {
                         setIsMoving(false);
                       }
