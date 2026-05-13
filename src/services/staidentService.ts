@@ -105,18 +105,18 @@ export const StaidentService = {
       
       Requirements:
       1. Write the submission in first person as the student.
-      2. Match the skill level (exceptional = polished, average = okay, low = many mistakes/confused).
-      3. Match the personality (e.g., if creative, make it long; if bored, make it brief).
-      4. Sometimes include realistic mistakes or misconceptions.
+      2. Match the skill level (exceptional = polished/accurate, average = okay/standard, low = many mistakes/confused).
+      3. Match the personality (e.g., if creative, make it expressive; if bored, make it brief).
+      4. Sometimes include realistic mistakes, typos, or misconceptions.
       5. Return ONLY the text of the submission.
     `;
 
     try {
-      const response = await callGemini(prompt, null, "gemini-3-flash-preview");
+      const response = await callGemini(prompt, null, "gemini-1.5-flash");
       return response.text || "I tried my best but was a bit confused by the prompt.";
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gemini Error:", error);
-      return "Student failed to generate content due to an internal error.";
+      return `[SIM_ERROR] Student experienced an issue: ${error.message || 'Connection lost'}.`;
     }
   },
 
@@ -164,7 +164,7 @@ export const StaidentService = {
             required: ["type", "text", "left", "top"]
           }
         }
-      }, "gemini-3-flash-preview");
+      }, "gemini-1.5-flash");
       
       const objects = extractJSON(response.text) || [];
       // Add version and background container expected by Fabric 6 JSON
@@ -209,7 +209,7 @@ export const StaidentService = {
           type: Type.OBJECT,
           additionalProperties: { type: Type.STRING } 
         }
-      }, "gemini-3-flash-preview");
+      }, "gemini-1.5-flash");
       
       return extractJSON(response.text) || {};
     } catch (error) {
@@ -246,7 +246,7 @@ export const StaidentService = {
           questions.forEach(q => {
             if (quizAnswers[q.id] === q.correctAnswer) correct++;
           });
-          const score = Math.round((correct / questions.length) * 100);
+          const score = Math.round((correct / (questions.length || 1)) * 100);
 
           const qSub: Partial<QuizSubmission> = {
             quizId: assignment.id,
@@ -309,14 +309,56 @@ export const StaidentService = {
   },
 
   async runSimulation(assignment: Material, staidents: Staident[], baseDelaySeconds: number) {
-    const tasks = staidents.map(s => {
+    // Stagger starts to avoid rate limits
+    const tasks = staidents.map((s, index) => {
       // Add randomness to the delay (up to +/- 20%)
       const variance = (Math.random() * 0.4) + 0.8; // 0.8 to 1.2
-      const actualDelay = baseDelaySeconds * 1000 * variance;
+      // Add a small sequential stagger (e.g. 500ms apart)
+      const actualDelay = (baseDelaySeconds * 1000 * variance) + (index * 500);
       return this.simulateSubmission(assignment, s, actualDelay);
     });
     
     return Promise.all(tasks);
+  },
+
+  async deleteSubmissionsForMaterial(materialId: string) {
+    try {
+      const mainQ = query(collection(db, 'submissions'), where('materialId', '==', materialId));
+      const quizQ = query(collection(db, 'quiz_submissions'), where('quizId', '==', materialId));
+      
+      const [mainSnap, quizSnap] = await Promise.all([getDocs(mainQ), getDocs(quizQ)]);
+      
+      const deletions = [
+        ...mainSnap.docs.map(d => deleteDoc(doc(db, 'submissions', d.id))),
+        ...quizSnap.docs.map(d => deleteDoc(doc(db, 'quiz_submissions', d.id)))
+      ];
+      
+      await Promise.all(deletions);
+      return deletions.length;
+    } catch (error) {
+      console.error("Error deleting submissions:", error);
+      throw error;
+    }
+  },
+
+  async deleteSubmissionForStudent(materialId: string, uid: string) {
+    try {
+      const mainQ = query(collection(db, 'submissions'), where('materialId', '==', materialId), where('uid', '==', uid));
+      const quizQ = query(collection(db, 'quiz_submissions'), where('quizId', '==', materialId), where('uid', '==', uid));
+      
+      const [mainSnap, quizSnap] = await Promise.all([getDocs(mainQ), getDocs(quizQ)]);
+      
+      const deletions = [
+        ...mainSnap.docs.map(d => deleteDoc(doc(db, 'submissions', d.id))),
+        ...quizSnap.docs.map(d => deleteDoc(doc(db, 'quiz_submissions', d.id)))
+      ];
+      
+      await Promise.all(deletions);
+      return deletions.length;
+    } catch (error) {
+      console.error("Error deleting student submission:", error);
+      throw error;
+    }
   },
 
   async generateMessageResponse(staident: Staident, history: { text: string, isFromStaident: boolean }[], newMessage: string) {

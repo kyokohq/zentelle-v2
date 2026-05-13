@@ -16,6 +16,7 @@ export interface UserProfile {
   graduationYear?: string;
   gpa?: string;
   lockerNumber?: string;
+  transcriptFields?: Record<string, string>;
 }
 
 export interface School {
@@ -28,6 +29,7 @@ export interface School {
   uid: string;
   timestamp: any;
   academicYear?: string;
+  customTranscriptFields?: string[];
 }
 
 export interface Course {
@@ -268,6 +270,7 @@ export interface DisciplineRecord {
   description: string;
   penalty: string;
   staffUid: string;
+  scheduledDate?: any;
 }
 
 export interface AttendanceRecord {

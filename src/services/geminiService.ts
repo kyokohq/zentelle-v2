@@ -18,26 +18,27 @@ export interface QuizQuestion {
 
 export const detectAnswerChoices = async (imageData: string): Promise<DetectedChoice[]> => {
   const prompt = `
-    Analyze this worksheet image. You are an expert at identifying educational assessment markers. 
-    Detect precisely:
-    1. Multiple-choice markers like "a)", "b)", "A.", "1.", or "[ ]", circles, and checkbox boxes next to options.
-    2. Answer fields like underline blanks "_______", clear empty boxes "☐", or distinct rectangular regions intended for student text entry.
+    Analyze this worksheet image. You are an expert at identifying educational assessment markers and student response areas.
+    Detect all potential interaction points, including:
+    1. Multiple-choice markers: "a)", "b)", "A.", "1.", "[ ]", empty circles, radio buttons, or checkbox boxes next to options.
+    2. Answer fields: Underline blanks "_______", clear empty boxes "☐", or distinct rectangular regions/frames intended for student text or numerical entry.
+    3. Selection areas: Words or phrases that are clearly intended to be circled or selected.
     
-    CRITICAL: Only identify markers that are functional parts of a test or worksheet structure. 
-    - For multiple choice, target the marker itself (the letter or the bubble).
+    CRITICAL GUIDELINES:
+    - Be comprehensive. If it looks like a place for a student to interact (click, select, or type), detect it.
+    - For multiple choice, target the marker (the letter/bubble) or the immediate vicinity intended for selection.
     - For text entry, target the entire line or box provided for the answer.
-    - IGNORE body text, titles, decorative images, and watermark-like text.
-    - If unsure if something is a marker, do NOT include it.
+    - IGNORE structural text (questions, titles, instructions) unless it's the target itself.
+    - Try to provide a label even if it's just a number or placeholder like "Blank".
     
     For each detection, provide:
-    - label: String. The text label (e.g. "a", "A.", "1.", "Choose...").
+    - label: String. The text label if any (e.g. "a", "A.", "1."). If no text, use a generic semantic label (e.g. "Checkbox", "Answer Line").
     - x, y: Number. Normalized coordinates (0 to 1) for the EXACT center of the marker or target area.
     - width, height: Number. Normalized width and height (0 to 1). 
-      - For multiple choice bubbles/letters: These should be VERY TIGHT around the marker (e.g., 0.02 to 0.04).
-      - For text response areas: These should cover the blank line or box (e.g., width 0.1 to 0.3, height 0.02 to 0.04).
-      - CRITICAL: Do NOT include the question text or other nearby options in the dimensions. 
+      - Multiple choice bubbles: typically 0.02 - 0.05.
+      - Text lines: typically width 0.1 - 0.4, height 0.02 - 0.06.
     - type: String. "choice" for bubbles/letters/boxes to be clicked, or "text-response" for lines/areas to be typed in.
-    - isCorrect: Boolean. Only mark as true if there is a CLEAR visual indicator (circle, check, bold, etc.) that this is the correct answer. Default to false.
+    - isCorrect: Boolean. Mark true ONLY if it is already circled, checked, or otherwise visually indicated as the key/correct answer in the source image.
     
     Return as a JSON array sorted from top-to-bottom, left-to-right.
   `;
@@ -61,7 +62,7 @@ export const detectAnswerChoices = async (imageData: string): Promise<DetectedCh
           required: ["label", "x", "y", "width", "height", "type"]
         }
       }
-    }, "gemini-3-flash-preview", imageData);
+    }, "gemini-1.5-flash", imageData);
 
     return extractJSON(response.text) || [];
   } catch (e: any) {
@@ -111,7 +112,7 @@ export const generateQuizItems = async (
           required: ["question", "choices"]
         }
       }
-    });
+    }, "gemini-1.5-flash");
 
     return extractJSON(response.text) || [];
   } catch (e: any) {

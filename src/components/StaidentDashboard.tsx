@@ -20,7 +20,8 @@ import {
   BrainCircuit,
   MessageCircle,
   Send,
-  ArrowLeft
+  ArrowLeft,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth } from '../firebase';
@@ -209,6 +210,22 @@ export function StaidentDashboard({ courseId, staidents }: StaidentDashboardProp
       console.error("Send error:", error);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const handleClearAllSubmissions = async () => {
+    if (!selectedAssignmentId) return;
+    if (!confirm("Are you sure you want to delete ALL submissions for this assignment? This cannot be undone.")) return;
+    
+    setIsProcessing(true);
+    try {
+      const count = await StaidentService.deleteSubmissionsForMaterial(selectedAssignmentId);
+      alert(`Successfully deleted ${count} submission(s).`);
+    } catch (error) {
+      console.error("Deletion error:", error);
+      alert("Failed to delete submissions.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -474,11 +491,26 @@ export function StaidentDashboard({ courseId, staidents }: StaidentDashboardProp
             </div>
 
             <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
-              <div className="p-8 border-b border-gray-100 flex justify-between items-center">
-                <h3 className="font-bold text-gray-900">Submission Log</h3>
-                <div className="flex items-center gap-4 text-xs font-bold text-gray-400">
-                  <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-500" /> Complete</span>
-                  <span className="flex items-center gap-1"><XCircle className="w-3 h-3 text-red-500" /> Missed</span>
+              <div className="p-8 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h3 className="font-bold text-gray-900">Submission Log</h3>
+                  <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest font-black">Assignment ID: {selectedAssignmentId || 'None Selected'}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  {assignmentSubmissions.length > 0 && (
+                    <button 
+                      onClick={handleClearAllSubmissions}
+                      disabled={isProcessing}
+                      className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 flex items-center gap-2"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Clear Submissions
+                    </button>
+                  )}
+                  <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-500" /> Complete</span>
+                    <span className="flex items-center gap-1"><XCircle className="w-3 h-3 text-red-500" /> Missed</span>
+                  </div>
                 </div>
               </div>
               <div className="overflow-x-auto">

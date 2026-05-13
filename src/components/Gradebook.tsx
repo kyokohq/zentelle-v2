@@ -25,8 +25,10 @@ import {
   ExternalLink,
   FileText,
   Eye,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
+import { StaidentService } from '../services/staidentService';
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo = {
@@ -152,6 +154,34 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
     return submission.status;
   };
 
+  const recalculateAndSaveAverage = async (studentUid: string, updatedSubmissions?: Submission[]) => {
+    const currentSubmissions = updatedSubmissions || submissions;
+    let sum = 0;
+    let count = 0;
+    
+    assignments.forEach(assignment => {
+      const sub = currentSubmissions.find(s => s.uid === studentUid && s.materialId === assignment.id);
+      const grade = sub ? sub.grade : null;
+      
+      if (grade !== null && grade !== undefined) {
+        sum += (grade / (assignment.points || 100)) * 100;
+        count++;
+      }
+    });
+
+    const average = count > 0 ? Math.round(sum / count) + '%' : 'N/A';
+    
+    // Update enrollment
+    const enrollId = `${studentUid}_${courseId}`;
+    try {
+      await updateDoc(doc(db, 'enrollments', enrollId), {
+        grade: average
+      });
+    } catch (e) {
+      console.error("Enrollment update failed (might be a staident):", e);
+    }
+  };
+
   const handleUpdateGrade = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingGrade) return;
@@ -161,6 +191,19 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
         grade: editingGrade.grade,
         feedback: editingGrade.feedback
       });
+
+      const currentStudentUid = submissions.find(s => s.id === editingGrade.submissionId)?.uid;
+      if (currentStudentUid) {
+        // We can't easily pass the updated submissions list because updateDoc is async and onSnapshot hasn't fired yet
+        // However, we can simulate the update for the calculation
+        const simulatedSubmissions = submissions.map(s => 
+          s.id === editingGrade.submissionId 
+            ? { ...s, grade: editingGrade.grade } 
+            : s
+        );
+        await recalculateAndSaveAverage(currentStudentUid, simulatedSubmissions);
+      }
+
       setEditingGrade(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `submissions/${editingGrade.submissionId}`);
@@ -212,10 +255,25 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="p-4 font-black text-xs uppercase tracking-widest text-gray-400 min-w-[200px] sticky left-0 bg-gray-50 z-10">Student</th>
                 {assignments.map(assignment => (
-                  <th key={assignment.id} className="p-4 font-black text-xs uppercase tracking-widest text-gray-400 min-w-[150px] text-center">
-                    <div className="flex flex-col items-center gap-1">
+                  <th key={assignment.id} className="p-4 font-black text-xs uppercase tracking-widest text-gray-400 min-w-[150px] text-center group/header">
+                    <div className="flex flex-col items-center gap-1 relative">
                       <span className="truncate max-w-[120px]">{assignment.title}</span>
                       <span className="text-[10px] text-gray-300 font-medium">Max: {assignment.points || 100}</span>
+                      
+                      {isAdmin && (
+                        <button 
+                          onClick={async () => {
+                            if (confirm(`Clear ALL submissions for "${assignment.title}"?`)) {
+                              await StaidentService.deleteSubmissionsForMaterial(assignment.id);
+                              alert("Submissions cleared.");
+                            }
+                          }}
+                          className="absolute -top-1 -right-1 opacity-0 group-hover/header:opacity-100 p-1 text-red-300 hover:text-red-500 transition-all bg-white rounded-md shadow-sm border border-red-50"
+                          title="Clear all submissions for this assignment"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                   </th>
                 ))}
@@ -247,16 +305,11 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
                       const status = getStatus(student.uid, assignment.id);
                       const submission = submissions.find(s => s.uid === student.uid && s.materialId === assignment.id);
                       
-                      if (grade !== null) {
-                        totalGrade += (grade / (assignment.points || 100)) * 100;
-                        gradedCount++;
-                      }
-
                       return (
                         <td key={assignment.id} className="p-4 text-center">
                           <div className="flex flex-col items-center gap-2">
                             {isAdmin ? (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 group/cell">
                                 <button 
                                   onClick={() => {
                                     if (submission) {
@@ -280,13 +333,28 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
                                   {grade !== null ? grade : status === 'submitted' ? 'Grade' : '-'}
                                 </button>
                                 {status === 'submitted' && (
-                                  <button 
-                                    onClick={() => setViewingSubmission(submission || null)}
-                                    className="p-1.5 text-gray-400 hover:text-[#004275] transition-colors"
-                                    title="View Submission"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                  </button>
+                                  <div className="flex flex-col gap-0.5">
+                                    <button 
+                                      onClick={() => setViewingSubmission(submission || null)}
+                                      className="p-1 flex items-center justify-center text-gray-400 hover:text-[#004275] transition-colors"
+                                      title="View Submission"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button 
+                                      onClick={async () => {
+                                        if (confirm(`Clear submission for ${student.displayName} on "${assignment.title}"?`)) {
+                                          await StaidentService.deleteSubmissionForStudent(assignment.id, student.uid);
+                                          const simulatedSubmissions = submissions.filter(s => !(s.uid === student.uid && s.materialId === assignment.id));
+                                          await recalculateAndSaveAverage(student.uid, simulatedSubmissions);
+                                        }
+                                      }}
+                                      className="p-1 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover/cell:opacity-100"
+                                      title="Clear Submission"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             ) : (
@@ -300,7 +368,18 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
                     })}
                     <td className="p-4 text-center">
                       <div className="font-black text-[#004275]">
-                        {gradedCount > 0 ? Math.round(totalGrade / gradedCount) + '%' : 'N/A'}
+                        {(() => {
+                          let sum = 0;
+                          let count = 0;
+                          assignments.forEach(assignment => {
+                            const grade = getGrade(student.uid, assignment.id);
+                            if (grade !== null) {
+                              sum += (grade / (assignment.points || 100)) * 100;
+                              count++;
+                            }
+                          });
+                          return count > 0 ? Math.round(sum / count) + '%' : 'N/A';
+                        })()}
                       </div>
                     </td>
                   </tr>

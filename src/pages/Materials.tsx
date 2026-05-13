@@ -6,6 +6,7 @@ import {
   Link as LinkIcon, 
   Plus, 
   ChevronRight, 
+  ChevronDown,
   MoreVertical, 
   Trash2, 
   Edit2, 
@@ -81,7 +82,22 @@ const COLORS = [
   '#FFB900', '#E81123', '#B4009E', '#00188F', '#00BCF2', '#BAD80A', '#FF8C00', '#767676'
 ];
 
-function MaterialItem({ material, viewMode, isAdmin, courseId, handleNavigate, togglePublish, handleEditClick, setMaterialToDelete, setShowDeleteConfirm, getIcon }: any) {
+function MaterialItem({ 
+  material, 
+  viewMode, 
+  isAdmin, 
+  courseId, 
+  handleNavigate, 
+  togglePublish, 
+  handleEditClick, 
+  setMaterialToDelete, 
+  setShowDeleteConfirm, 
+  getIcon, 
+  onMoveClick,
+  isExpanded,
+  onToggleExpand,
+  children
+}: any) {
   const {
     attributes,
     listeners,
@@ -144,6 +160,13 @@ function MaterialItem({ material, viewMode, isAdmin, courseId, handleNavigate, t
                   <Edit2 className="w-4 h-4" />
                 </button>
                 <button 
+                  onClick={() => onMoveClick(material)}
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-[#004275]"
+                  title="Move to folder"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+                <button 
                   onClick={() => {
                     setMaterialToDelete(material.id);
                     setShowDeleteConfirm(true);
@@ -193,44 +216,59 @@ function MaterialItem({ material, viewMode, isAdmin, courseId, handleNavigate, t
   }
 
   return (
+    <div className="material-item-wrapper">
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-all border border-gray-100 flex items-center gap-4 group"
+      className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-all border border-gray-100 flex items-center justify-between gap-4 group"
     >
-      {isAdmin && (
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded text-gray-400">
-          <GripVertical className="w-4 h-4" />
-        </div>
-      )}
-      <div className="p-2 bg-gray-50 rounded-xl relative">
-        {getIcon(material.type, material.color)}
-        {!material.published && isAdmin && (
-          <div className="absolute -top-1 -right-1 bg-gray-500 text-white p-0.5 rounded-full shadow-sm" title="Unpublished">
-            <Lock className="w-2 h-2" />
+      <div className="flex items-center gap-4 flex-1">
+        {material.type === 'folder' && viewMode === 'list' && (
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand(material.id);
+            }}
+            className="p-1 -ml-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-[#004275] transition-all"
+          >
+            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        )}
+        {isAdmin && (
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded text-gray-400">
+            <GripVertical className="w-4 h-4" />
           </div>
         )}
+        <div className="p-2 bg-gray-50 rounded-xl relative shrink-0">
+          {getIcon(material.type, material.color)}
+          {!material.published && isAdmin && (
+            <div className="absolute -top-1 -right-1 bg-gray-500 text-white p-0.5 rounded-full shadow-sm" title="Unpublished">
+              <Lock className="w-2 h-2" />
+            </div>
+          )}
+        </div>
+        <button 
+          onClick={() => {
+            if (material.type === 'folder') {
+              handleNavigate(`/courses/${courseId}/materials/${material.id}`);
+            } else if (material.type === 'link' && material.url) {
+              window.open(material.url, '_blank');
+            } else if (material.type === 'file' && material.url) {
+              window.open(material.url, '_blank');
+            } else {
+              handleNavigate(`/courses/${courseId}/assignments/${material.id}`);
+            }
+          }}
+          className="text-left min-w-0"
+        >
+          <h3 className="font-bold text-gray-900 group-hover:text-[#004275] transition-colors truncate">{material.title}</h3>
+          <p className="text-sm text-gray-500 line-clamp-1">{material.description}</p>
+        </button>
       </div>
-      <button 
-        onClick={() => {
-          if (material.type === 'folder') {
-            handleNavigate(`/courses/${courseId}/materials/${material.id}`);
-          } else if (material.type === 'link' && material.url) {
-            window.open(material.url, '_blank');
-          } else if (material.type === 'file' && material.url) {
-            window.open(material.url, '_blank');
-          } else {
-            handleNavigate(`/courses/${courseId}/assignments/${material.id}`);
-          }
-        }}
-        className="flex-grow text-left"
-      >
-        <h3 className="font-bold text-gray-900 group-hover:text-[#004275] transition-colors">{material.title}</h3>
-        <p className="text-sm text-gray-500 line-clamp-1">{material.description}</p>
-      </button>
+
       <div className="flex items-center gap-4">
         {material.type === 'assignment' && material.points && (
-          <div className="hidden sm:block text-xs font-medium text-[#004275] bg-blue-50 px-2 py-0.5 rounded-full">
+          <div className="hidden sm:block text-xs font-medium text-[#004275] bg-blue-50 px-2 py-0.5 rounded-full whitespace-nowrap">
             {material.points} pts
           </div>
         )}
@@ -250,6 +288,13 @@ function MaterialItem({ material, viewMode, isAdmin, courseId, handleNavigate, t
               <Edit2 className="w-4 h-4" />
             </button>
             <button 
+              onClick={() => onMoveClick(material)}
+              className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-[#004275]"
+              title="Move to folder"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+            <button 
               onClick={() => {
                 setMaterialToDelete(material.id);
                 setShowDeleteConfirm(true);
@@ -260,8 +305,17 @@ function MaterialItem({ material, viewMode, isAdmin, courseId, handleNavigate, t
             </button>
           </div>
         )}
-        <ChevronRight className="w-5 h-5 text-gray-300" />
+        {/* Non-folder list items still get a right chevron for consistency, but folders now use the left one */}
+        {material.type !== 'folder' && (
+          <ChevronRight className="w-5 h-5 text-gray-300" />
+        )}
       </div>
+    </div>
+    {isExpanded && children && (
+      <div className="ml-8 border-l-2 border-gray-100 pl-4 space-y-3 mt-3">
+        {children}
+      </div>
+    )}
     </div>
   );
 }
@@ -303,7 +357,7 @@ export default function Materials({
   const [newMaterialPoints, setNewMaterialPoints] = useState<number>(100);
   const [newMaterialDueDate, setNewMaterialDueDate] = useState('');
   const [newMaterialPublished, setNewMaterialPublished] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [isGoogleAuth, setIsGoogleAuth] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -312,6 +366,28 @@ export default function Materials({
   const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [materialToMove, setMaterialToMove] = useState<Material | null>(null);
+  const [allFolders, setAllFolders] = useState<Material[]>([]);
+  const [isMoving, setIsMoving] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [inlineAddIndex, setInlineAddIndex] = useState<number | null>(null);
+  const [inlineAddParentId, setInlineAddParentId] = useState<string | null>(null);
+
+  const toggleFolder = (id: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleInlineAdd = (index: number, parentId: string | null = null) => {
+    setInlineAddIndex(index);
+    setInlineAddParentId(parentId);
+    setShowAddModal(true);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -325,6 +401,19 @@ export default function Materials({
   );
 
   const isAdmin = userRole === 'admin';
+
+  useEffect(() => {
+    if (!courseId || !isAdmin) return;
+    const qFolders = query(
+      collection(db, 'materials'),
+      where('courseId', '==', courseId),
+      where('type', '==', 'folder')
+    );
+    const unsub = onSnapshot(qFolders, (snap) => {
+      setAllFolders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Material)));
+    });
+    return () => unsub();
+  }, [courseId, isAdmin]);
 
   useEffect(() => {
     // Check Google Auth status
@@ -422,25 +511,9 @@ export default function Materials({
     if (!over || !isAdmin) return;
 
     const activeMaterial = materials.find(m => m.id === active.id);
-    const overMaterial = materials.find(m => m.id === over.id);
-
     if (!activeMaterial) return;
 
-    // 1. Check if dropped INTO a folder
-    if (overMaterial && overMaterial.type === 'folder' && active.id !== over.id) {
-      // Move into folder
-      try {
-        await updateDoc(doc(db, 'materials', activeMaterial.id), {
-          parentId: overMaterial.id,
-          order: 0 // Reset order in new folder
-        });
-        return;
-      } catch (error) {
-        console.error('Error moving material into folder:', error);
-      }
-    }
-
-    // 2. Reorder within the same level
+    // Reorder within the same level
     if (active.id !== over.id) {
       const oldIndex = materials.findIndex(m => m.id === active.id);
       const newIndex = materials.findIndex(m => m.id === over.id);
@@ -469,15 +542,42 @@ export default function Materials({
 
     const materialData: any = {
       courseId,
-      parentId: folderId || null,
+      parentId: inlineAddParentId !== null ? inlineAddParentId : (folderId || null),
       type: newMaterialType,
       title: newMaterialTitle,
       description: newMaterialDescription,
       uid: auth.currentUser.uid,
-      order: materials.length,
+      order: inlineAddIndex !== null ? inlineAddIndex : materials.length,
       timestamp: serverTimestamp(),
       published: newMaterialPublished,
     };
+
+    if (inlineAddIndex !== null) {
+      // Shift existing materials
+      const batch = writeBatch(db);
+      const levelMaterials = inlineAddParentId 
+        ? materials.filter(m => m.parentId === inlineAddParentId) // This is tricky if it's nested
+        : materials;
+        
+      // For now, simpler: re-fetch and re-order OR just append if simpler.
+      // Better way: Get all materials at this parentId and update their orders.
+      const q = query(
+        collection(db, 'materials'),
+        where('courseId', '==', courseId),
+        where('parentId', '==', materialData.parentId)
+      );
+      const snap = await getDocs(q);
+      const existingAtLevel = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Material))
+        .sort((a,b) => (a.order || 0) - (b.order || 0));
+
+      existingAtLevel.forEach((m, i) => {
+        if (i >= inlineAddIndex) {
+          batch.update(doc(db, 'materials', m.id), { order: i + 1 });
+        }
+      });
+      await batch.commit();
+    }
 
     if (newMaterialType === 'folder') {
       materialData.color = newMaterialColor;
@@ -562,6 +662,8 @@ export default function Materials({
     setNewMaterialPublished(true);
     setIsEditing(false);
     setEditingMaterialId(null);
+    setInlineAddIndex(null);
+    setInlineAddParentId(null);
   };
 
   const deleteMaterial = async (id: string) => {
@@ -628,6 +730,73 @@ export default function Materials({
       case 'link': return <LinkIcon className="w-10 h-10 text-green-500" />;
       default: return <FileIcon className="w-10 h-10 text-gray-500" />;
     }
+  };
+
+  const AddIndicator = ({ index, parentId }: { index: number, parentId: string | null }) => {
+    if (!isAdmin || viewMode !== 'list') return null;
+    return (
+      <div className="relative h-4 group/indicator -my-2 flex items-center justify-center z-10">
+        <div className="absolute inset-0 opacity-0 group-hover/indicator:opacity-100 flex items-center justify-center transition-all">
+          <div className="w-full h-0.5 bg-[#004275]/20 absolute" />
+          <button 
+            onClick={() => handleInlineAdd(index, parentId)}
+            className="flex items-center gap-2 px-3 py-1 bg-[#004275] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-110 transition-all z-20"
+          >
+            <Plus className="w-3 h-3" />
+            Add material
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const FolderContents = ({ parentId, depth = 0 }: { parentId: string, depth?: number }) => {
+    const [contents, setContents] = useState<Material[]>([]);
+    
+    useEffect(() => {
+      const q = query(
+        collection(db, 'materials'),
+        where('courseId', '==', courseId),
+        where('parentId', '==', parentId),
+        orderBy('order', 'asc')
+      );
+      return onSnapshot(q, (snap) => {
+        setContents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Material)));
+      });
+    }, [parentId]);
+
+    return (
+      <div className="space-y-3">
+        <AddIndicator index={0} parentId={parentId} />
+        {contents.map((m, idx) => (
+          <div key={m.id}>
+            <MaterialItem
+              material={m}
+              viewMode="list"
+              isAdmin={isAdmin}
+              courseId={courseId}
+              handleNavigate={handleNavigate}
+              togglePublish={togglePublish}
+              handleEditClick={handleEditClick}
+              setMaterialToDelete={setMaterialToDelete}
+              setShowDeleteConfirm={setShowDeleteConfirm}
+              getIcon={getIcon}
+              onMoveClick={(mat: any) => {
+                setMaterialToMove(mat);
+                setShowMoveModal(true);
+              }}
+              isExpanded={expandedFolders.has(m.id)}
+              onToggleExpand={toggleFolder}
+            >
+              {expandedFolders.has(m.id) && (
+                <FolderContents parentId={m.id} depth={depth + 1} />
+              )}
+            </MaterialItem>
+            <AddIndicator index={idx + 1} parentId={parentId} />
+          </div>
+        ))}
+      </div>
+    );
   };
 
   if (loading) {
@@ -768,20 +937,33 @@ export default function Materials({
               strategy={viewMode === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
             >
               <AnimatePresence mode="popLayout">
-                {filteredMaterials.map((material) => (
-                  <MaterialItem
-                    key={material.id}
-                    material={material}
-                    viewMode={viewMode}
-                    isAdmin={isAdmin}
-                    courseId={courseId}
-                    handleNavigate={handleNavigate}
-                    togglePublish={togglePublish}
-                    handleEditClick={handleEditClick}
-                    setMaterialToDelete={setMaterialToDelete}
-                    setShowDeleteConfirm={setShowDeleteConfirm}
-                    getIcon={getIcon}
-                  />
+                {viewMode === 'list' && <AddIndicator index={0} parentId={folderId || null} />}
+                {filteredMaterials.map((material, idx) => (
+                  <div key={material.id}>
+                    <MaterialItem
+                      material={material}
+                      viewMode={viewMode}
+                      isAdmin={isAdmin}
+                      courseId={courseId}
+                      handleNavigate={handleNavigate}
+                      togglePublish={togglePublish}
+                      handleEditClick={handleEditClick}
+                      setMaterialToDelete={setMaterialToDelete}
+                      setShowDeleteConfirm={setShowDeleteConfirm}
+                      getIcon={getIcon}
+                      onMoveClick={(m: any) => {
+                        setMaterialToMove(m);
+                        setShowMoveModal(true);
+                      }}
+                      isExpanded={expandedFolders.has(material.id)}
+                      onToggleExpand={toggleFolder}
+                    >
+                      {expandedFolders.has(material.id) && (
+                        <FolderContents parentId={material.id} />
+                      )}
+                    </MaterialItem>
+                    {viewMode === 'list' && <AddIndicator index={idx + 1} parentId={folderId || null} />}
+                  </div>
                 ))}
               </AnimatePresence>
             </SortableContext>
@@ -803,7 +985,17 @@ export default function Materials({
                 setMaterialToDelete={setMaterialToDelete}
                 setShowDeleteConfirm={setShowDeleteConfirm}
                 getIcon={getIcon}
-              />
+                onMoveClick={(m: any) => {
+                  setMaterialToMove(m);
+                  setShowMoveModal(true);
+                }}
+                isExpanded={expandedFolders.has(material.id)}
+                onToggleExpand={toggleFolder}
+              >
+                {expandedFolders.has(material.id) && (
+                  <FolderContents parentId={material.id} />
+                )}
+              </MaterialItem>
             ))}
           </AnimatePresence>
         </div>
@@ -1070,7 +1262,91 @@ export default function Materials({
           </motion.div>
         </div>
       )}
-      {/* Delete Confirmation Modal */}
+      {/* Move Material Modal */}
+      {showMoveModal && materialToMove && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-black text-[#004275] font-headline">Move Material</h2>
+              <button onClick={() => setShowMoveModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6" /></button>
+            </div>
+            
+            <p className="text-sm text-gray-500 mb-6">
+              Select where you want to move <span className="font-bold text-gray-900">"{materialToMove.title}"</span>:
+            </p>
+
+            <div className="space-y-2 max-h-[300px] overflow-y-auto mb-8 pr-2">
+              <button 
+                onClick={async () => {
+                  setIsMoving(true);
+                  try {
+                    await updateDoc(doc(db, 'materials', materialToMove.id), { parentId: null });
+                    setShowMoveModal(false);
+                    setMaterialToMove(null);
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setIsMoving(false);
+                  }
+                }}
+                disabled={isMoving || materialToMove.parentId === null}
+                className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all ${
+                  materialToMove.parentId === null 
+                    ? 'bg-[#004275]/5 border-[#004275] text-[#004275]' 
+                    : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                } group`}
+              >
+                <div className={`p-2 rounded-xl transition-colors ${materialToMove.parentId === null ? 'bg-[#004275] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  <LayoutGrid className="w-4 h-4" />
+                </div>
+                <span className="font-bold">Root (No Folder)</span>
+              </button>
+
+              {allFolders
+                .filter(f => f.id !== materialToMove.id) // Can't move into itself
+                .map((folder) => (
+                  <button 
+                    key={folder.id}
+                    onClick={async () => {
+                      setIsMoving(true);
+                      try {
+                        await updateDoc(doc(db, 'materials', materialToMove.id), { parentId: folder.id });
+                        setShowMoveModal(false);
+                        setMaterialToMove(null);
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        setIsMoving(false);
+                      }
+                    }}
+                    disabled={isMoving || materialToMove.parentId === folder.id}
+                    className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all ${
+                      materialToMove.parentId === folder.id 
+                        ? 'bg-[#004275]/5 border-[#004275] text-[#004275]' 
+                        : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                    } group`}
+                  >
+                    <div className={`p-2 rounded-xl transition-colors ${materialToMove.parentId === folder.id ? 'bg-[#004275] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                      <Folder className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold truncate">{folder.title}</span>
+                  </button>
+                ))}
+            </div>
+
+            <button 
+              onClick={() => setShowMoveModal(false)}
+              className="w-full py-4 border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 transition-all"
+            >
+              Cancel
+            </button>
+          </motion.div>
+        </div>
+      )}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <motion.div 

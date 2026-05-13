@@ -25,20 +25,25 @@ export const extractJSON = (text: string | null | undefined): any => {
   return null;
 };
 
-export const callGemini = async (prompt: string, config?: any, modelName: string = "gemini-3-flash-preview", image?: string) => {
+export const callGemini = async (prompt: string, config?: any, modelName: string = "gemini-1.5-flash", image?: string) => {
   try {
-    const contents: any[] = [{ text: prompt }];
+    const contents: any[] = [{ role: "user", parts: [{ text: prompt }] }];
     if (image) {
-      contents.unshift({ inlineData: { data: image.split(',')[1], mimeType: "image/png" } });
+      contents[0].parts.unshift({ inlineData: { data: image.split(',')[1], mimeType: "image/png" } });
     }
 
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: [{ role: "user", parts: contents }],
-      config: config || {}
+    const response = await fetch("/api/ai/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents, config, model: modelName })
     });
 
-    return response;
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: "Unknown API error" }));
+      throw new Error(err.error || `HTTP ${response.status}`);
+    }
+
+    return await response.json();
   } catch (error) {
     console.error("Gemini API Error:", error);
     throw error;
