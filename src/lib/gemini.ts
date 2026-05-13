@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+const ai = new GoogleGenAI({ apiKey: (process.env.AI_API_KEY || process.env.GEMINI_API_KEY) as string });
 
 export const extractJSON = (text: string | null | undefined): any => {
   if (!text) return null;

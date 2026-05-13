@@ -15,6 +15,7 @@ import {
 import { db, auth } from '../firebase';
 import { Course, Activity, Resource, Enrollment, Staident } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/utils';
+import { useDialog } from '../context/DialogContext';
 import { motion, AnimatePresence } from 'motion/react';
 import Materials from './Materials';
 import Gradebook from '../components/Gradebook';
@@ -42,6 +43,7 @@ import {
 } from 'lucide-react';
 
 export function CourseDetail({ userRole }: { userRole?: string }) {
+  const { showAlert } = useDialog();
   const { courseId, tab, folderId } = useParams<{ courseId: string, tab?: string, folderId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -582,11 +584,11 @@ export function CourseDetail({ userRole }: { userRole?: string }) {
                     type="file" 
                     id="course-file-upload" 
                     className="hidden" 
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
                         if (file.size > 5 * 1024 * 1024) {
-                          alert("File size exceeds 5MB limit.");
+                          await showAlert("File size exceeds 5MB limit.", "File Too Large");
                           return;
                         }
                         const reader = new FileReader();

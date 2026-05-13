@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { UserProfile, Enrollment } from '../types';
+import { useDialog } from '../context/DialogContext';
 import { 
   Plus, 
   Search, 
@@ -23,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 export function EnrollmentManager({ courseId, schoolId }: { courseId: string, schoolId: string }) {
+  const { showConfirm } = useDialog();
   const [enrolledStudents, setEnrolledStudents] = useState<UserProfile[]>([]);
   const [allStudents, setAllStudents] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +114,7 @@ export function EnrollmentManager({ courseId, schoolId }: { courseId: string, sc
   };
 
   const removeEnrollment = async (studentId: string) => {
-    if (confirm("Remove this student from the course?")) {
+    if (await showConfirm("Remove this student from the course?", "Remove Enrollment")) {
       try {
         await deleteDoc(doc(db, 'enrollments', `${studentId}_${courseId}`));
       } catch (error) {

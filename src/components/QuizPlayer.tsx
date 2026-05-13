@@ -28,6 +28,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { QuizQuestion, Material, QuizSubmission } from '../types';
+import { useDialog } from '../context/DialogContext';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface QuizPlayerProps {
@@ -36,6 +37,7 @@ interface QuizPlayerProps {
 }
 
 export function QuizPlayer({ quizId, onClose }: QuizPlayerProps) {
+  const { showAlert } = useDialog();
   const [quiz, setQuiz] = useState<Material | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -185,7 +187,7 @@ export function QuizPlayer({ quizId, onClose }: QuizPlayerProps) {
       setCompleted(true);
     } catch (error) {
       console.error("Error submitting quiz:", error);
-      alert("Failed to submit. Please check your connection.");
+      await showAlert("Failed to submit. Please check your connection.", "Submission Error");
     } finally {
       setSubmitting(false);
     }

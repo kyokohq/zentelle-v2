@@ -141,11 +141,11 @@ async function startServer() {
   // Gemini AI Proxy Route
   app.post("/api/ai/generate", async (req, res) => {
     const { contents, config, model } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.AI_API_KEY || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      console.error("GEMINI_API_KEY is missing in environment variables");
-      return res.status(500).json({ error: "Gemini API key not configured on server" });
+      console.error("AI API Key is missing in environment variables");
+      return res.status(500).json({ error: "AI API key not configured on server" });
     }
 
     try {

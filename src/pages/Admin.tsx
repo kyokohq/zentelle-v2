@@ -16,6 +16,7 @@ import {
 import { db } from '../firebase';
 import { School, UserProfile, Staident } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/utils';
+import { useDialog } from '../context/DialogContext';
 import { 
   Shield, 
   School as SchoolIcon, 
@@ -36,6 +37,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUserId: string, currentSchoolId: string | null, userEmail: string | null }) {
+  const { showAlert, showConfirm } = useDialog();
   const [activeTab, setActiveTab] = useState<'users' | 'schools' | 'settings' | 'sis' | 'attendance' | 'discipline'>('users');
   const [schools, setSchools] = useState<School[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -67,11 +69,11 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
 
   const currentSchool = schools.find(s => s.id === currentSchoolId);
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        alert("File size exceeds 2MB limit.");
+        await showAlert("File size exceeds 2MB limit.", "File Too Large");
         return;
       }
       
@@ -88,11 +90,11 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
             if (!snap.empty) {
               const currentData = snap.docs[0].data();
               await setDoc(schoolRef, { ...currentData, logoUrl: base64 });
-              alert("School logo updated successfully.");
+              await showAlert("School logo updated successfully.", "Success");
             }
           } catch (error) {
             console.error("Error updating logo:", error);
-            alert("Failed to update logo: " + (error instanceof Error ? error.message : "Undefined error"));
+            await showAlert("Failed to update logo: " + (error instanceof Error ? error.message : "Undefined error"), "Error");
           }
         }
       };
@@ -107,10 +109,10 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
         ...currentSchool, 
         academicYear 
       });
-      alert("Academic year updated successfully.");
+      await showAlert("Academic year updated successfully.", "Success");
     } catch (error) {
       console.error("Error updating academic year:", error);
-      alert("Failed to update academic year.");
+      await showAlert("Failed to update academic year.", "Error");
     }
   };
 
@@ -121,10 +123,10 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
         ...currentSchool, 
         customTranscriptFields: fields 
       });
-      alert("Transcript fields updated successfully.");
+      await showAlert("Transcript fields updated successfully.", "Success");
     } catch (error) {
       console.error("Error updating transcript fields:", error);
-      alert("Failed to update transcript fields.");
+      await showAlert("Failed to update transcript fields.", "Error");
     }
   };
 
@@ -194,7 +196,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
   const handleSaveSchool = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!isSuperAdmin) {
-      alert("Only super-admins can create or modify school records directly.");
+      await showAlert("Only super-admins can create or modify school records directly.", "Access Denied");
       return;
     }
     const formData = new FormData(e.currentTarget);
@@ -223,10 +225,11 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
 
   const handleDeleteSchool = async (id: string) => {
     if (!isSuperAdmin) {
-      alert("Only super-admins can delete schools.");
+      await showAlert("Only super-admins can delete schools.", "Access Denied");
       return;
     }
-    if (confirm("Are you sure you want to delete this school?")) {
+    const confirmed = await showConfirm("Are you sure you want to delete this school?", "Delete School");
+    if (confirmed) {
       try {
         await deleteDoc(doc(db, 'schools', id));
       } catch (error) {
@@ -315,7 +318,8 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
   };
 
   const handleDeleteUser = async (uid: string, isStaident?: boolean) => {
-    if (!confirm(`Are you sure you want to ${isStaident ? 'remove this simulation student' : 'delete this user'}?`)) return;
+    const confirmed = await showConfirm(`Are you sure you want to ${isStaident ? 'remove this simulation student' : 'delete this user'}?`, "Delete Student/User");
+    if (!confirmed) return;
     
     try {
       if (isStaident) {
@@ -324,7 +328,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
       } else {
         await deleteDoc(doc(db, 'users', uid));
       }
-      alert("Student/User removed successfully.");
+      await showAlert("Student/User removed successfully.", "Success");
       if (showStudentModal) setShowStudentModal(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, isStaident ? 'staidents' : 'users');
@@ -360,7 +364,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
           scheduledDate: scheduledDate || null,
           updatedAt: serverTimestamp()
         });
-        alert('Discipline referral updated successfully.');
+        await showAlert('Discipline referral updated successfully.', 'Success');
       } else {
         await addDoc(collection(db, 'discipline'), {
           uid: student.uid || student.id,
@@ -372,7 +376,7 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
           teacherId: currentUserId,
           timestamp: serverTimestamp()
         });
-        alert('Discipline referral logged successfully.');
+        await showAlert('Discipline referral logged successfully.', 'Success');
       }
       setEditingReferral(null);
     } catch (error) {
@@ -381,10 +385,11 @@ export function Admin({ currentUserId, currentSchoolId, userEmail }: { currentUs
   };
 
   const handleDeleteReferral = async (id: string) => {
-    if (confirm("Are you sure you want to delete this referral?")) {
+    const confirmed = await showConfirm("Are you sure you want to delete this referral?", "Delete Referral");
+    if (confirmed) {
       try {
         await deleteDoc(doc(db, 'discipline', id));
-        alert("Referral deleted successfully.");
+        await showAlert("Referral deleted successfully.", "Success");
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `discipline/${id}`);
       }

@@ -31,6 +31,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { useDialog } from '../context/DialogContext';
 import { QuizQuestion, Material } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -116,12 +117,12 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
 
   const handleSave = async () => {
     if (!title.trim()) {
-      alert("Please enter a quiz title.");
+      await showAlert("Please enter a quiz title.", "Missing Title");
       return;
     }
 
     if (!auth.currentUser) {
-      alert("Please sign in to save.");
+      await showAlert("Please sign in to save.", "Authentication Required");
       return;
     }
 
@@ -175,7 +176,7 @@ export function QuizCreator({ courseId, quizId, onClose, onSaved }: QuizCreatorP
       onClose();
     } catch (error) {
       console.error("Error saving quiz:", error);
-      alert("Failed to save quiz. See console for details.");
+      await showAlert("Failed to save quiz. See console for details.", "Error");
     } finally {
       setSaving(false);
     }

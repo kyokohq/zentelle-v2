@@ -11,6 +11,7 @@ import {
 import { db, auth } from '../firebase';
 import { Material, Submission, UserProfile, Enrollment } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/utils';
+import { useDialog } from '../context/DialogContext';
 import { motion } from 'motion/react';
 import { 
   Search, 
@@ -38,6 +39,7 @@ interface GradebookProps {
 }
 
 export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
+  const { showAlert, showConfirm } = useDialog();
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [assignments, setAssignments] = useState<Material[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -255,9 +257,9 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
                       {isAdmin && (
                         <button 
                           onClick={async () => {
-                            if (confirm(`Clear ALL submissions for "${assignment.title}"?`)) {
+                            if (await showConfirm(`Clear ALL submissions for "${assignment.title}"?`, "Clear Submissions")) {
                               await StaidentService.deleteSubmissionsForMaterial(assignment.id);
-                              alert("Submissions cleared.");
+                              await showAlert("Submissions cleared.", "Success");
                             }
                           }}
                           className="absolute -top-1 -right-1 opacity-0 group-hover/header:opacity-100 p-1 text-red-300 hover:text-red-500 transition-all bg-white rounded-md shadow-sm border border-red-50"
@@ -335,7 +337,7 @@ export default function Gradebook({ courseId, isAdmin }: GradebookProps) {
                                     </button>
                                     <button 
                                       onClick={async () => {
-                                        if (confirm(`Clear submission for ${student.displayName} on "${assignment.title}"?`)) {
+                                        if (await showConfirm(`Clear submission for ${student.displayName} on "${assignment.title}"?`, "Delete Submission")) {
                                           await StaidentService.deleteSubmissionForStudent(assignment.id, student.uid);
                                           const simulatedSubmissions = submissions.filter(s => !(s.uid === student.uid && s.materialId === assignment.id));
                                           await recalculateAndSaveAverage(student.uid, simulatedSubmissions);

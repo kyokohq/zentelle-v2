@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Staident, Material, Submission } from '../types';
+import { useDialog } from '../context/DialogContext';
 import { StaidentService } from '../services/staidentService';
 import { 
   Users, 
@@ -33,6 +34,7 @@ interface StaidentDashboardProps {
 }
 
 export function StaidentDashboard({ courseId, staidents }: StaidentDashboardProps) {
+  const { showAlert, showConfirm } = useDialog();
   const [activeSubTab, setActiveSubTab] = useState<'manage' | 'simulate' | 'analytics' | 'messages'>('manage');
   const [assignments, setAssignments] = useState<Material[]>([]);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>('');
@@ -118,37 +120,37 @@ export function StaidentDashboard({ courseId, staidents }: StaidentDashboardProp
 
   const handleRemoveStaidents = async () => {
     if (staidents.length === 0) {
-      alert("No AI students in this course to remove.");
+      await showAlert("No AI students in this course to remove.", "Info");
       return;
     }
     
     // Default to removing all if count is accidentally too high or user just wants to clear
     const countToRemove = Math.min(staidentCount, staidents.length);
     
-    if (!confirm(`Are you sure you want to remove ${countToRemove} AI student(s)?`)) return;
+    if (!await showConfirm(`Are you sure you want to remove ${countToRemove} AI student(s)?`, "Remove AI Students")) return;
     setIsProcessing(true);
     try {
       const removedCount = await StaidentService.removeStaidentsFromCourse(courseId, countToRemove);
-      alert(`Successfully removed ${removedCount} AI student(s).`);
+      await showAlert(`Successfully removed ${removedCount} AI student(s).`, "Success");
     } catch (error) {
       console.error("Removal error:", error);
-      alert("Failed to remove AI students. Check console for details.");
+      await showAlert("Failed to remove AI students. Check console for details.", "Error");
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleRemoveIndividualStaident = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove ${name}?`)) return;
+    if (!await showConfirm(`Are you sure you want to remove ${name}?`, "Remove Student")) return;
     setIsProcessing(true);
     try {
       // We can use the same service or a new one
       // Let's add a single removal method to StaidentService
       await StaidentService.removeSingleStaident(id);
-      alert(`${name} has been removed.`);
+      await showAlert(`${name} has been removed.`, "Success");
     } catch (error) {
       console.error("Removal error:", error);
-      alert("Failed to remove student.");
+      await showAlert("Failed to remove student.", "Error");
     } finally {
       setIsProcessing(false);
     }
@@ -215,15 +217,15 @@ export function StaidentDashboard({ courseId, staidents }: StaidentDashboardProp
 
   const handleClearAllSubmissions = async () => {
     if (!selectedAssignmentId) return;
-    if (!confirm("Are you sure you want to delete ALL submissions for this assignment? This cannot be undone.")) return;
+    if (!await showConfirm("Are you sure you want to delete ALL submissions for this assignment? This cannot be undone.", "Delete Submissions")) return;
     
     setIsProcessing(true);
     try {
       const count = await StaidentService.deleteSubmissionsForMaterial(selectedAssignmentId);
-      alert(`Successfully deleted ${count} submission(s).`);
+      await showAlert(`Successfully deleted ${count} submission(s).`, "Success");
     } catch (error) {
       console.error("Deletion error:", error);
-      alert("Failed to delete submissions.");
+      await showAlert("Failed to delete submissions.", "Error");
     } finally {
       setIsProcessing(false);
     }

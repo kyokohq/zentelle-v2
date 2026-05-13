@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { useDialog } from '../context/DialogContext';
 import { Material, Submission, HotspotData } from '../types';
 
 interface InteractiveWorksheetProps {
@@ -54,6 +55,7 @@ interface InteractiveWorksheetProps {
 }
 
 export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }: InteractiveWorksheetProps) {
+  const { showAlert, showConfirm } = useDialog();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
   const [material, setMaterial] = useState<Material | null>(null);
@@ -543,9 +545,9 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     }
   };
 
-  const handleClearDetections = () => {
+  const handleClearDetections = async () => {
     if (!fabricCanvas || isActuallyStudent) return;
-    if (confirm("Clear all detected markers and hotspots?")) {
+    if (await showConfirm("Clear all detected markers and hotspots?", "Clear Worksheet")) {
       const hotspots = fabricCanvas.getObjects().filter(obj => (obj as any).isHotspot);
       fabricCanvas.remove(...hotspots);
       setSelectedHotspot(null);
@@ -699,10 +701,10 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         fabricCanvas.discardActiveObject();
       }
 
-      alert(`AI detected ${detections.length} total markers.`);
+      await showAlert(`AI detected ${detections.length} total markers.`, "AI Detection Complete");
     } catch (error) {
       console.error("AI Detection Error:", error);
-      alert("AI Detection failed. Try selecting a smaller area or check your connection.");
+      await showAlert("AI Detection failed. Try selecting a smaller area or check your connection.", "Detection Failed");
     } finally {
       setIsDetecting(false);
     }
@@ -1189,7 +1191,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           description: canvasJson,
           timestamp: serverTimestamp()
         });
-        alert("Template saved successfully.");
+        await showAlert("Template saved successfully.", "Success");
       } else {
         // Student saves their work
         const subId = `${auth.currentUser.uid}_${materialId}`;
@@ -1202,7 +1204,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
           timestamp: serverTimestamp(),
           submittedAt: serverTimestamp()
         }, { merge: true });
-        alert("Worksheet submitted successfully.");
+        await showAlert("Worksheet submitted successfully.", "Success");
       }
       onClose();
     } catch (error) {

@@ -55,18 +55,23 @@ import Materials from './pages/Materials';
 import AssignmentDetail from './pages/AssignmentDetail';
 import { Loader2, LogIn, X, Plus } from 'lucide-react';
 
+import { DialogProvider, useDialog } from './context/DialogContext';
+
 // Zentelle App Entry
 export default function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
-        <ZentelleApp />
-      </BrowserRouter>
+      <DialogProvider>
+        <BrowserRouter>
+          <ZentelleApp />
+        </BrowserRouter>
+      </DialogProvider>
     </ErrorBoundary>
   );
 }
 
 function ZentelleApp() {
+  const { showAlert, showConfirm } = useDialog();
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [schools, setSchools] = useState<School[]>([]);
@@ -308,7 +313,7 @@ function ZentelleApp() {
       const snapshot = await getDocs(q);
       
       if (snapshot.empty) {
-        alert("Course code not found. Please try BIO101, HIS202, or ENG303.");
+        await showAlert("Course code not found. Please try BIO101, HIS202, or ENG303.", "Not Found");
         return;
       }
 
@@ -319,7 +324,7 @@ function ZentelleApp() {
       const enrollSnap = await getDocs(qEnroll);
       
       if (!enrollSnap.empty) {
-        alert("You are already enrolled in this course.");
+        await showAlert("You are already enrolled in this course.", "Already Enrolled");
         setShowAddCourse(false);
         return;
       }
@@ -344,7 +349,7 @@ function ZentelleApp() {
       const snapshot = await getDocs(q);
       
       if (!snapshot.empty) {
-        alert("A course with this code already exists.");
+        await showAlert("A course with this code already exists.", "Duplicate Code");
         return;
       }
 
@@ -377,7 +382,8 @@ function ZentelleApp() {
   };
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm("Are you sure you want to delete this course? This will remove all enrollments and content.")) return;
+    const confirmed = await showConfirm("Are you sure you want to delete this course? This will remove all enrollments and content.", "Delete Course");
+    if (!confirmed) return;
     try {
       // 1. Delete course doc
       await deleteDoc(doc(db, 'courses', courseId));
@@ -388,7 +394,7 @@ function ZentelleApp() {
       const deletions = snap.docs.map(d => deleteDoc(doc(db, 'enrollments', d.id)));
       await Promise.all(deletions);
       
-      alert("Course deleted successfully.");
+      await showAlert("Course deleted successfully.", "Success");
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `courses/${courseId}`);
     }
@@ -858,17 +864,18 @@ function CreateGroupModal({ onClose, onSubmit }: { onClose: () => void, onSubmit
 }
 
 function UploadResourceModal({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => void }) {
+  const { showAlert } = useDialog();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Science');
   const [type, setType] = useState<'pdf' | 'video' | 'link' | 'file'>('pdf');
   const [url, setUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        alert("File size exceeds 5MB limit.");
+        await showAlert("File size exceeds 5MB limit.", "File Too Large");
         return;
       }
       setIsUploading(true);

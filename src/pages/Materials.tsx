@@ -57,6 +57,7 @@ import { db, auth } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Material, Submission } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/utils';
+import { useDialog } from '../context/DialogContext';
 import {
   DndContext,
   closestCenter,
@@ -91,12 +92,12 @@ function MaterialItem({
   handleNavigate, 
   togglePublish, 
   handleEditClick, 
-  setMaterialToDelete, 
-  setShowDeleteConfirm, 
   getIcon, 
   onMoveClick,
   isExpanded,
   onToggleExpand,
+  showConfirm,
+  deleteMaterial,
   children
 }: any) {
   const {
@@ -168,9 +169,11 @@ function MaterialItem({
                   <Share2 className="w-4 h-4" />
                 </button>
                 <button 
-                  onClick={() => {
-                    setMaterialToDelete(material.id);
-                    setShowDeleteConfirm(true);
+                  onClick={async () => {
+                    const confirmed = await showConfirm("Are you sure you want to delete this material? This action cannot be undone and will delete all contents if it's a folder.", "Delete Material");
+                    if (confirmed) {
+                      deleteMaterial(material.id);
+                    }
                   }}
                   className="p-2 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500"
                 >
@@ -296,9 +299,11 @@ function MaterialItem({
               <Share2 className="w-4 h-4" />
             </button>
             <button 
-              onClick={() => {
-                setMaterialToDelete(material.id);
-                setShowDeleteConfirm(true);
+              onClick={async () => {
+                const confirmed = await showConfirm("Are you sure you want to delete this material? This action cannot be undone and will delete all contents if it's a folder.", "Delete Material");
+                if (confirmed) {
+                  deleteMaterial(material.id);
+                }
               }}
               className="p-2 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500"
             >
@@ -334,6 +339,7 @@ export default function Materials({
   onNavigate?: (path: string) => void,
   hideHeader?: boolean
 }) {
+  const { showAlert, showConfirm } = useDialog();
   const params = useParams();
   const courseId = propCourseId || params.courseId;
   const folderId = propFolderId || params.folderId;
@@ -363,9 +369,6 @@ export default function Materials({
   const [isGoogleAuth, setIsGoogleAuth] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [materialToMove, setMaterialToMove] = useState<Material | null>(null);
@@ -614,11 +617,11 @@ export default function Materials({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
-        alert("File size exceeds 10MB limit.");
+        await showAlert("File size exceeds 10MB limit.", "File Too Large");
         return;
       }
       setIsUploading(true);
@@ -676,14 +679,9 @@ export default function Materials({
   };
 
   const deleteMaterial = async (id: string) => {
-    setIsDeleting(true);
     try {
       const materialDoc = await getDoc(doc(db, 'materials', id));
-      if (!materialDoc.exists()) {
-        setIsDeleting(false);
-        setShowDeleteConfirm(false);
-        return;
-      }
+      if (!materialDoc.exists()) return;
       const material = { id: materialDoc.id, ...materialDoc.data() } as Material;
 
       if (material.type === 'folder') {
@@ -706,15 +704,10 @@ export default function Materials({
       }
 
       await deleteDoc(doc(db, 'materials', id));
-      setShowDeleteConfirm(false);
-      setMaterialToDelete(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `materials/${id}`);
-    } finally {
-      setIsDeleting(false);
     }
   };
-
   const togglePublish = async (material: Material) => {
     try {
       await updateDoc(doc(db, 'materials', material.id), {
@@ -787,8 +780,6 @@ export default function Materials({
               handleNavigate={handleNavigate}
               togglePublish={togglePublish}
               handleEditClick={handleEditClick}
-              setMaterialToDelete={setMaterialToDelete}
-              setShowDeleteConfirm={setShowDeleteConfirm}
               getIcon={getIcon}
               onMoveClick={(mat: any) => {
                 setMaterialToMove(mat);
@@ -796,6 +787,8 @@ export default function Materials({
               }}
               isExpanded={expandedFolders.has(m.id)}
               onToggleExpand={toggleFolder}
+              showConfirm={showConfirm}
+              deleteMaterial={deleteMaterial}
             >
               {expandedFolders.has(m.id) && (
                 <FolderContents parentId={m.id} depth={depth + 1} />
@@ -957,8 +950,6 @@ export default function Materials({
                       handleNavigate={handleNavigate}
                       togglePublish={togglePublish}
                       handleEditClick={handleEditClick}
-                      setMaterialToDelete={setMaterialToDelete}
-                      setShowDeleteConfirm={setShowDeleteConfirm}
                       getIcon={getIcon}
                       onMoveClick={(m: any) => {
                         setMaterialToMove(m);
@@ -966,6 +957,8 @@ export default function Materials({
                       }}
                       isExpanded={expandedFolders.has(material.id)}
                       onToggleExpand={toggleFolder}
+                      showConfirm={showConfirm}
+                      deleteMaterial={deleteMaterial}
                     >
                       {expandedFolders.has(material.id) && (
                         <FolderContents parentId={material.id} />
@@ -991,8 +984,6 @@ export default function Materials({
                 handleNavigate={handleNavigate}
                 togglePublish={togglePublish}
                 handleEditClick={handleEditClick}
-                setMaterialToDelete={setMaterialToDelete}
-                setShowDeleteConfirm={setShowDeleteConfirm}
                 getIcon={getIcon}
                 onMoveClick={(m: any) => {
                   setMaterialToMove(m);
@@ -1000,6 +991,8 @@ export default function Materials({
                 }}
                 isExpanded={expandedFolders.has(material.id)}
                 onToggleExpand={toggleFolder}
+                showConfirm={showConfirm}
+                deleteMaterial={deleteMaterial}
               >
                 {expandedFolders.has(material.id) && (
                   <FolderContents parentId={material.id} />
@@ -1353,49 +1346,6 @@ export default function Materials({
             >
               Cancel
             </button>
-          </motion.div>
-        </div>
-      )}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl"
-          >
-            <div className="text-center">
-              <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="w-8 h-8 text-red-500" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Material?</h3>
-              <p className="text-gray-500 mb-8">
-                Are you sure you want to delete this material? This action cannot be undone and will delete all contents if it's a folder.
-              </p>
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => {
-                    setShowDeleteConfirm(false);
-                    setMaterialToDelete(null);
-                  }}
-                  disabled={isDeleting}
-                  className="flex-1 px-4 py-3 border border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition-all disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={() => materialToDelete && deleteMaterial(materialToDelete)}
-                  disabled={isDeleting}
-                  className="flex-1 px-4 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isDeleting ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Deleting...
-                    </>
-                  ) : 'Delete'}
-                </button>
-              </div>
-            </div>
           </motion.div>
         </div>
       )}
