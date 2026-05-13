@@ -11,6 +11,7 @@ import {
   Square, 
   Circle, 
   Type, 
+  Pencil,
   Eraser, 
   Undo2, 
   Save, 
@@ -63,7 +64,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [activeTool, setActiveTool] = useState<'select' | 'text' | 'rect' | 'circle' | 'draw' | 'hotspot' | 'check' | 'line'>('select');
+  const [activeTool, setActiveTool] = useState<'select' | 'text' | 'rect' | 'circle' | 'draw' | 'eraser' | 'hotspot' | 'check' | 'line'>('select');
   const [selectedHotspot, setSelectedHotspot] = useState<fabric.Object | null>(null);
   const [updateVersion, setUpdateVersion] = useState(0);
   const isAdmin = userRole === 'admin';
@@ -810,11 +811,23 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
     if (!fabricCanvas) return;
     setActiveTool(tool);
     
-    fabricCanvas.isDrawingMode = tool === 'draw';
+    fabricCanvas.isDrawingMode = tool === 'draw' || tool === 'eraser';
     fabricCanvas.discardActiveObject();
     fabricCanvas.renderAll();
 
-    if (tool === 'text') {
+    if (tool === 'draw') {
+      fabricCanvas.isDrawingMode = true;
+      const brush = new fabric.PencilBrush(fabricCanvas);
+      brush.width = 3;
+      brush.color = '#004275';
+      fabricCanvas.freeDrawingBrush = brush;
+    } else if (tool === 'eraser') {
+      fabricCanvas.isDrawingMode = true;
+      const brush = new fabric.PencilBrush(fabricCanvas);
+      brush.width = 15;
+      brush.color = '#f1f5f9'; // Match background color for simple "erasing"
+      fabricCanvas.freeDrawingBrush = brush;
+    } else if (tool === 'text') {
       const text = new fabric.IText('Double click to type...', {
         left: 100,
         top: 100,
@@ -1227,12 +1240,26 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
                   icon={<MousePointer2 className="w-5 h-5" />} 
                   label="Select" 
                 />
+                {!isActuallyStudent && (
+                  <ToolBtnSquare 
+                    active={activeTool === 'hotspot'} 
+                    onClick={() => handleToolChange('hotspot')} 
+                    icon={<Target className="w-5 h-5" />} 
+                    label="Hotspot" 
+                    isNew
+                  />
+                )}
                 <ToolBtnSquare 
-                  active={activeTool === 'hotspot'} 
-                  onClick={() => handleToolChange('hotspot')} 
-                  icon={<Target className="w-5 h-5" />} 
-                  label="Hotspot" 
-                  isNew
+                  active={activeTool === 'draw'} 
+                  onClick={() => handleToolChange('draw')} 
+                  icon={<Pencil className="w-5 h-5" />} 
+                  label="Brush" 
+                />
+                <ToolBtnSquare 
+                  active={activeTool === 'eraser'} 
+                  onClick={() => handleToolChange('eraser')} 
+                  icon={<Eraser className="w-5 h-5" />} 
+                  label="Eraser" 
                 />
                 <ToolBtnSquare 
                   active={activeTool === 'text'} 
@@ -1244,7 +1271,7 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
                   active={activeTool === 'rect'} 
                   onClick={() => handleToolChange('rect')} 
                   icon={<Square className="w-5 h-5" />} 
-                  label="Drawing" 
+                  label="Rectangle" 
                 />
                 <ToolBtnSquare 
                   active={activeTool === 'check'} 
@@ -1261,38 +1288,40 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">AI Assistance</h3>
-                <div className="w-4 h-4 rounded bg-gray-50 flex items-center justify-center border border-gray-100">
-                   <div className="w-2 h-[1px] bg-gray-300" />
+            {!isActuallyStudent && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">AI Assistance</h3>
+                  <div className="w-4 h-4 rounded bg-gray-50 flex items-center justify-center border border-gray-100">
+                     <div className="w-2 h-[1px] bg-gray-300" />
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50/50 rounded-xl p-3 mb-4 border border-blue-100 flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                  <p className="text-[9px] font-bold text-blue-700 leading-tight">
+                    Pro Tip: Draw a <span className="text-blue-900 border-b border-blue-200">Drawing</span> box first, select it, then click AI Detect to scan only that area.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <ToolBtnSquare 
+                    active={isDetecting} 
+                    onClick={handleDetectAnswers} 
+                    icon={isDetecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <SearchIcon className="w-5 h-5" />} 
+                    label={isDetecting ? "Processing..." : "AI Detect"} 
+                    subLabel="Tip: Draw a box to scan specific area"
+                  />
+                  <ToolBtnSquare 
+                    active={showQuizModal} 
+                    onClick={() => setShowQuizModal(true)} 
+                    icon={<Sparkles className="w-5 h-5" />} 
+                    label="Quiz Gen" 
+                    isNew
+                  />
                 </div>
               </div>
-              
-              <div className="bg-blue-50/50 rounded-xl p-3 mb-4 border border-blue-100 flex items-start gap-2">
-                <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
-                <p className="text-[9px] font-bold text-blue-700 leading-tight">
-                  Pro Tip: Draw a <span className="text-blue-900 border-b border-blue-200">Drawing</span> box first, select it, then click AI Detect to scan only that area.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <ToolBtnSquare 
-                  active={isDetecting} 
-                  onClick={handleDetectAnswers} 
-                  icon={isDetecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <SearchIcon className="w-5 h-5" />} 
-                  label={isDetecting ? "Processing..." : "AI Detect"} 
-                  subLabel="Tip: Draw a box to scan specific area"
-                />
-                <ToolBtnSquare 
-                  active={showQuizModal} 
-                  onClick={() => setShowQuizModal(true)} 
-                  icon={<Sparkles className="w-5 h-5" />} 
-                  label="Quiz Gen" 
-                  isNew
-                />
-              </div>
-            </div>
+            )}
 
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -1338,7 +1367,9 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
                   className="bg-white border border-gray-100 hover:border-blue-200 hover:bg-blue-50 p-4 rounded-xl flex flex-col items-center justify-center gap-2 group transition-all"
                 >
                   <Save className="w-5 h-5 text-gray-300 group-hover:text-blue-500" />
-                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-blue-600">{saving ? 'Saving...' : 'Save All'}</span>
+                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-blue-600">
+                    {saving ? 'Saving...' : (isActuallyStudent ? 'Submit Work' : 'Save Template')}
+                  </span>
                 </button>
                 <button 
                   onClick={() => fabricCanvas?.remove(...fabricCanvas.getActiveObjects())}
