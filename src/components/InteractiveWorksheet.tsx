@@ -552,25 +552,33 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
       const detections = await detectAnswerChoices(dataUrl);
       
       detections.forEach(det => {
-        let left: number, top: number;
+        let left: number, top: number, width: number, height: number;
         
         if (cropRect) {
           // Map local crop coordinates back to global canvas coordinates
           left = cropRect.left + (det.x * cropRect.width);
           top = cropRect.top + (det.y * cropRect.height);
+          width = det.width * cropRect.width;
+          height = det.height * cropRect.height;
         } else {
           left = det.x * nativeDimensions.width;
           top = det.y * nativeDimensions.height;
+          width = det.width * nativeDimensions.width;
+          height = det.height * nativeDimensions.height;
         }
         
+        // Ensure minimum size for interaction
+        width = Math.max(width, 30);
+        height = Math.max(height, 30);
+
         let type = 'info' as HotspotData['type'];
         let fill = 'rgba(0, 66, 117, 0.2)';
         let stroke = '#004275';
 
         if (det.type === 'text-response') {
           type = 'text-response';
-          fill = 'rgba(249, 115, 22, 0.2)';
-          stroke = '#ea580c';
+          fill = 'rgba(59, 130, 246, 0.15)'; // Blue tint for text fields
+          stroke = '#3b82f6';
         } else if (det.isCorrect) {
           type = 'correct';
           fill = 'rgba(34, 197, 94, 0.2)';
@@ -582,24 +590,24 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
         }
 
         const hotspot = new fabric.Rect({
-          left: left - 20,
-          top: top - 20,
-          width: 40,
-          height: 40,
+          left: left - (width / 2),
+          top: top - (height / 2),
+          width: width,
+          height: height,
           fill,
           stroke,
           strokeWidth: 2,
-          rx: 8,
-          ry: 8,
+          rx: 6,
+          ry: 6,
           transparentCorners: false,
           cornerColor: stroke,
-          cornerSize: 10,
+          cornerSize: 8,
         });
 
         (hotspot as any).isHotspot = true;
         (hotspot as any).hotspotData = {
           type,
-          content: det.label || (type === 'text-response' ? 'Type answer here' : ''),
+          content: det.label || (type === 'text-response' ? 'Double click to type...' : ''),
           id: Math.random().toString(36).substr(2, 9)
         };
 
@@ -1260,6 +1268,14 @@ export function InteractiveWorksheet({ materialId, courseId, userRole, onClose }
                    <div className="w-2 h-[1px] bg-gray-300" />
                 </div>
               </div>
+              
+              <div className="bg-blue-50/50 rounded-xl p-3 mb-4 border border-blue-100 flex items-start gap-2">
+                <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                <p className="text-[9px] font-bold text-blue-700 leading-tight">
+                  Pro Tip: Draw a <span className="text-blue-900 border-b border-blue-200">Drawing</span> box first, select it, then click AI Detect to scan only that area.
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <ToolBtnSquare 
                   active={isDetecting} 

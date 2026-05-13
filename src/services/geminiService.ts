@@ -6,6 +6,8 @@ export interface DetectedChoice {
   label: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
   type: 'choice' | 'text-response';
   isCorrect?: boolean;
 }
@@ -20,15 +22,20 @@ export const detectAnswerChoices = async (imageData: string): Promise<DetectedCh
   
   const prompt = `
     Analyze this worksheet image. You are an expert at identifying educational assessment markers. 
-    Detect:
-    1. Multiple-choice markers like "a)", "b)", "A.", "(1)", "[ ]", circles, or checkboxes next to text.
-    2. Answer fields like underline blanks "_______", empty boxes "☐", or rectangular regions intended for text entry.
+    Detect precisely:
+    1. Multiple-choice markers like "a)", "b)", "A.", "1.", or "[ ]", circles, and checkbox boxes next to options.
+    2. Answer fields like underline blanks "_______", clear empty boxes "☐", or distinct rectangular regions intended for student text entry.
     
-    CRITICAL: Only identify markers that are clearly part of a test or worksheet structure. Avoid random text or decorative images.
+    CRITICAL: Only identify markers that are functional parts of a test or worksheet structure. 
+    - For multiple choice, target the marker itself (the letter or the bubble).
+    - For text entry, target the entire line or box provided for the answer.
+    - IGNORE body text, titles, decorative images, and watermark-like text.
+    - If unsure if something is a marker, do NOT include it.
     
     For each detection, provide:
-    - label: String. The text label (e.g. "a", "b", "c", "d" or "q1"). If it's a blank box, leave as empty string or "blank".
-    - x, y: Number. Normalized coordinates (0 to 1) for the EXACT center of the marker (e.g. the center of the checkbox or the letter 'a').
+    - label: String. The text associated with the marker (e.g. "a", "b", "c", "d" or "Question 1"). If it's a blank box with no label, leave as empty string.
+    - x, y: Number. Normalized coordinates (0 to 1) for the EXACT center of the detected marker or text area.
+    - width, height: Number. Normalized width and height (0 to 1) of the detected marker or text field area. Use the actual dimensions of the box or line.
     - type: String. "choice" for bubbles/letters/boxes to be clicked, or "text-response" for lines/areas to be typed in.
     - isCorrect: Boolean. Only mark as true if there is a CLEAR visual indicator (circle, check, bold, etc.) that this is the correct answer. Default to false.
     
@@ -53,10 +60,12 @@ export const detectAnswerChoices = async (imageData: string): Promise<DetectedCh
             label: { type: Type.STRING },
             x: { type: Type.NUMBER },
             y: { type: Type.NUMBER },
+            width: { type: Type.NUMBER },
+            height: { type: Type.NUMBER },
             type: { type: Type.STRING, enum: ["choice", "text-response"] },
             isCorrect: { type: Type.BOOLEAN }
           },
-          required: ["label", "x", "y", "type"]
+          required: ["label", "x", "y", "width", "height", "type"]
         }
       }
     }
